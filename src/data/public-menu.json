@@ -1,0 +1,92 @@
+{
+  "products": [
+    {
+      "id": "latte",
+      "name": "Latte de la casa",
+      "category": "Cafés",
+      "description": "Espresso, leche cremosa y una pausa que sabe bien. Frío o caliente, a tu manera.",
+      "prices": [
+        5500,
+        7000,
+        8500
+      ],
+      "active": true,
+      "tone": "coffee"
+    },
+    {
+      "id": "matcha",
+      "name": "Matcha latte",
+      "category": "Matcha",
+      "description": "Un momento de calma. Matcha y leche en una mezcla suave y delicada.",
+      "prices": [
+        5000,
+        10000,
+        15000
+      ],
+      "active": true,
+      "tone": "matcha"
+    },
+    {
+      "id": "boba",
+      "name": "Boba latte",
+      "category": "Bobas",
+      "description": "Leche, café y perlas de tapioca. Pequeños momentos de felicidad.",
+      "prices": [
+        6500,
+        8500,
+        10000
+      ],
+      "active": true,
+      "tone": "boba"
+    },
+    {
+      "id": "caramel",
+      "name": "Caramel latte",
+      "category": "Cafés",
+      "description": "Café con leche y un toque de caramelo para endulzar tu día.",
+      "prices": [
+        6000,
+        8000,
+        9500
+      ],
+      "active": true,
+      "tone": "caramel"
+    },
+    {
+      "id": "frappe",
+      "name": "Frappé de chocolate",
+      "category": "Frappés",
+      "description": "Chocolate, hielo y una textura deliciosamente cremosa.",
+      "prices": [
+        6000,
+        8000,
+        9500
+      ],
+      "active": true,
+      "tone": "cocoa"
+    },
+    {
+      "id": "americano",
+      "name": "Americano",
+      "category": "Cafés",
+      "description": "El carácter del espresso, con el espacio para disfrutarlo despacio.",
+      "prices": [
+        3500,
+        4500,
+        5500
+      ],
+      "active": true,
+      "tone": "dark"
+    }
+  ],
+  "settings": {
+    "phones": [
+      "529841651702",
+      "529831137618"
+    ],
+    "address": "",
+    "hours": "",
+    "sample": true
+  },
+  "modifiers": []
+}

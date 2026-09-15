@@ -2,7 +2,7 @@
 .next/
 .next-admin/
 node_modules/
-data/
+/data/
 test-results/
 .env*
 *.tsbuildinfo
