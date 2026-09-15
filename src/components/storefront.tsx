@@ -297,7 +297,10 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
               )
               .map((p, i) => (
                 <button key={p.id} className="product-card" onClick={() => choose(p)}>
-                  <div className={`product-visual ${p.tone}`}>
+                  <div
+                    className={`product-visual ${p.tone}${p.imageUrl ? ' has-photo' : ''}`}
+                    style={p.imageUrl ? { backgroundImage: `url(${p.imageUrl})` } : undefined}
+                  >
                     <span className="product-number">0{i + 1}</span>
                     <Coffee size={85} strokeWidth={0.8} />
                     <span className="product-monogram">lattecito</span>
@@ -358,53 +361,53 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
             </div>
           </section>
         )}
-<section className="contact" id="visitanos">
-           <div>
-             <span className="eyebrow">NOS ENCANTARÍA SABER DE TI</span>
-             <h2>
-               ¿Nos tomamos
-               <br />
-               un lattecito?
-             </h2>
-           </div>
-           <div className="contact-details">
-             <p>
-               <MapPin size={19} />
-               {settings?.address || 'Escríbenos para conocer nuestra ubicación.'}
-             </p>
-             <p>
-               <Clock size={19} />
-               {settings?.hours || 'Consulta nuestros horarios por WhatsApp.'}
-             </p>
-             <div className="contact-links">
-               {(settings?.phones ?? ['529841651702', '529831137618']).map((p, i) => (
-                 <a
-                   key={p}
-                   href={`https://wa.me/${p}`}
-                   target="_blank"
-                   rel="noreferrer"
-                   className={i === 0 ? 'button' : 'text-link'}
-                 >
-                   <MessageCircle size={17} />
-                   {i === 0 ? 'Hablemos por WhatsApp' : 'Contacto alternativo'}
-                   <ArrowUpRight size={16} />
-                 </a>
-               ))}
-             </div>
-           </div>
-           <div className="map-container">
-             <iframe
-               src="https://www.google.com/maps?q=18.682381,-88.396380&hl=es&z=15&output=embed"
-               width="100%"
-               height="100%"
-               style={{ border: 0 }}
-               allowFullScreen
-               loading="lazy"
-               referrerPolicy="no-referrer-when-downgrade"
-               title="Ubicación de Lattecito Coffee"
-             />
-           </div>
-         </section>
+        <section className="contact" id="visitanos">
+          <div>
+            <span className="eyebrow">NOS ENCANTARÍA SABER DE TI</span>
+            <h2>
+              ¿Nos tomamos
+              <br />
+              un lattecito?
+            </h2>
+          </div>
+          <div className="contact-details">
+            <p>
+              <MapPin size={19} />
+              {settings?.address || 'Escríbenos para conocer nuestra ubicación.'}
+            </p>
+            <p>
+              <Clock size={19} />
+              {settings?.hours || 'Consulta nuestros horarios por WhatsApp.'}
+            </p>
+            <div className="contact-links">
+              {(settings?.phones ?? ['529841651702', '529831137618']).map((p, i) => (
+                <a
+                  key={p}
+                  href={`https://wa.me/${p}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={i === 0 ? 'button' : 'text-link'}
+                >
+                  <MessageCircle size={17} />
+                  {i === 0 ? 'Hablemos por WhatsApp' : 'Contacto alternativo'}
+                  <ArrowUpRight size={16} />
+                </a>
+              ))}
+            </div>
+          </div>
+          <div className="map-container">
+            <iframe
+              src="https://www.google.com/maps?q=18.682381,-88.396380&hl=es&z=15&output=embed"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              title="Ubicación de Lattecito Coffee"
+            />
+          </div>
+        </section>
       </main>
       <footer>
         <Link href="/" className="wordmark">
@@ -431,7 +434,12 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
             >
               <X />
             </button>
-            <div className={`product-dialog-art product-visual ${selected.tone}`}>
+            <div
+              className={`product-dialog-art product-visual ${selected.tone}${selected.imageUrl ? ' has-photo' : ''}`}
+              style={
+                selected.imageUrl ? { backgroundImage: `url(${selected.imageUrl})` } : undefined
+              }
+            >
               <Coffee size={120} strokeWidth={0.7} />
               <span className="product-monogram">lattecito</span>
             </div>

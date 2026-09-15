@@ -26,6 +26,7 @@ export type Product = {
   stock: number;
   active: boolean;
   tone: string;
+  imageUrl?: string;
   recipes?: RecipeItem[][];
 };
 export type Line = { productId: string; size: number; quantity: number; modifierIds?: string[] };
@@ -228,7 +229,7 @@ export function whatsappText(
   modifiers: MenuModifier[] = [],
 ) {
   const t = calculate(products, lines, 0, modifiers);
-  return `Hola, Lattecito Coffee. Me gustaría pedir:\n\n${t.items.map((i) => `${i.quantity} × ${i.name} · ${i.size}\n${money(i.unitPrice)} c/u · ${money(i.unitPrice * i.quantity)}`).join('\n\n')}\n\nTotal: ${money(t.total)} MXN\n${note.trim() ? `Notas: ${note.trim()}\n` : ''}¿Me confirman disponibilidad y tiempo de preparación?`;
+  return `Hola, Lattecito Coffee. Me gustaría pedir:\n\n${t.items.map((i) => `${i.quantity} × ${i.name} · ${i.size}`).join('\n\n')}\n\n${note.trim() ? `Notas: ${note.trim()}\n` : ''}¿Me confirman disponibilidad y tiempo de preparación?`;
 }
 export function quoteSale(store: Store, lines: Line[], percent: number) {
   const base = calculate(store.products, lines, percent, store.modifiers);

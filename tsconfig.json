@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,7 +24,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
@@ -30,7 +36,11 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next-admin/types/**/*.ts",
-    ".next-admin/dev/types/**/*.ts"
+    ".next-admin/dev/types/**/*.ts",
+    ".next-catalog-admin/types/**/*.ts",
+    ".next-catalog-admin/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

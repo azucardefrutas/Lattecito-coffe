@@ -1,6 +1,8 @@
 node_modules/
 .next/
 .next-admin/
+.next-catalog-admin/
+.codex-remote-attachments/
 /data/
 .env*
 !.env.example

@@ -1,6 +1,11 @@
 import type { NextConfig } from 'next';
 const config: NextConfig = {
-  distDir: process.env.APP_SURFACE === 'admin' ? '.next-admin' : '.next',
+  distDir:
+    process.env.APP_SURFACE === 'admin'
+      ? '.next-admin'
+      : process.env.APP_SURFACE === 'catalog-admin'
+        ? '.next-catalog-admin'
+        : '.next',
   env: { APP_SURFACE: process.env.APP_SURFACE ?? 'public' },
   poweredByHeader: false,
   serverExternalPackages: ['node:sqlite'],

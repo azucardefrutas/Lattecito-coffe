@@ -1,18 +1,20 @@
 import type { Store } from './model.ts';
+import type { PublicCatalog } from './catalog-schema.ts';
 
 // Explicit allowlist: never publish stock, costs, recipes, sales or authentication.
-export function publicMenu(s: Store) {
+export function publicMenu(s: Store): PublicCatalog {
   return {
     products: s.products
       .filter((p) => p.active)
-      .map(({ id, name, category, description, prices, active, tone }) => ({
+      .map(({ id, name, category, description, prices, active, tone, imageUrl }) => ({
         id,
         name,
         category,
         description,
         prices,
         active,
-        tone,
+        tone: tone as PublicCatalog['products'][number]['tone'],
+        ...(imageUrl ? { imageUrl } : {}),
       })),
     settings: {
       phones: s.settings.phones,

@@ -30,67 +30,53 @@
 
   /* Glassmorphism design tokens */
   --glass-bg: rgba(255, 255, 255, 0.68);
-  --glass-bg-subtle: rgba(252, 249, 244, 0.60);
+  --glass-bg-subtle: rgba(252, 249, 244, 0.6);
   --glass-bg-elevated: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(255, 255, 255, 0.75);
-  --glass-border-subtle: rgba(222, 213, 201, 0.50);
+  --glass-border-subtle: rgba(222, 213, 201, 0.5);
   --glass-blur: blur(16px) saturate(180%);
   --glass-blur-heavy: blur(24px) saturate(190%);
   --glass-shadow: 0 10px 30px -5px rgba(113, 60, 59, 0.08), 0 4px 10px -2px rgba(53, 45, 40, 0.04);
-  --glass-shadow-lg: 0 20px 45px -10px rgba(113, 60, 59, 0.14), 0 8px 16px -4px rgba(53, 45, 40, 0.06);
+  --glass-shadow-lg:
+    0 20px 45px -10px rgba(113, 60, 59, 0.14), 0 8px 16px -4px rgba(53, 45, 40, 0.06);
 
   /* Claymorphism design tokens */
   /* 1. Clay Cream (cards, secondary buttons, tiles, metric blocks) */
   --clay-cream-bg: #fbf6ef;
   --clay-cream-border: rgba(255, 255, 255, 0.85);
   --clay-cream-shadow:
-    6px 10px 20px rgba(115, 103, 94, 0.12),
-    -4px -4px 12px rgba(255, 255, 255, 0.95),
-    inset 2px 2px 4px rgba(255, 255, 255, 0.9),
-    inset -2px -2px 5px rgba(115, 103, 94, 0.09);
+    6px 10px 20px rgba(115, 103, 94, 0.12), -4px -4px 12px rgba(255, 255, 255, 0.95),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.9), inset -2px -2px 5px rgba(115, 103, 94, 0.09);
   --clay-cream-hover:
-    8px 14px 26px rgba(115, 103, 94, 0.16),
-    -5px -5px 14px rgba(255, 255, 255, 1),
-    inset 2px 2px 5px rgba(255, 255, 255, 0.95),
-    inset -2px -2px 5px rgba(115, 103, 94, 0.07);
+    8px 14px 26px rgba(115, 103, 94, 0.16), -5px -5px 14px rgba(255, 255, 255, 1),
+    inset 2px 2px 5px rgba(255, 255, 255, 0.95), inset -2px -2px 5px rgba(115, 103, 94, 0.07);
   --clay-cream-active:
-    2px 4px 10px rgba(115, 103, 94, 0.14),
-    -1px -1px 4px rgba(255, 255, 255, 0.8),
-    inset 3px 3px 6px rgba(115, 103, 94, 0.14),
-    inset -2px -2px 4px rgba(255, 255, 255, 0.7);
+    2px 4px 10px rgba(115, 103, 94, 0.14), -1px -1px 4px rgba(255, 255, 255, 0.8),
+    inset 3px 3px 6px rgba(115, 103, 94, 0.14), inset -2px -2px 4px rgba(255, 255, 255, 0.7);
 
   /* 2. Clay Wine (primary buttons, active CTA, prominent actions) */
   --clay-wine-bg: linear-gradient(145deg, #7c4342, #683635);
   --clay-wine-shadow:
-    5px 9px 22px rgba(113, 60, 59, 0.36),
-    -3px -3px 9px rgba(255, 255, 255, 0.5),
-    inset 2px 2px 3px rgba(255, 255, 255, 0.32),
-    inset -3px -3px 6px rgba(35, 12, 12, 0.4);
+    5px 9px 22px rgba(113, 60, 59, 0.36), -3px -3px 9px rgba(255, 255, 255, 0.5),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.32), inset -3px -3px 6px rgba(35, 12, 12, 0.4);
   --clay-wine-hover:
-    7px 13px 26px rgba(113, 60, 59, 0.45),
-    -4px -4px 12px rgba(255, 255, 255, 0.65),
-    inset 2px 2px 4px rgba(255, 255, 255, 0.4),
-    inset -3px -3px 6px rgba(35, 12, 12, 0.35);
+    7px 13px 26px rgba(113, 60, 59, 0.45), -4px -4px 12px rgba(255, 255, 255, 0.65),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.4), inset -3px -3px 6px rgba(35, 12, 12, 0.35);
   --clay-wine-active:
-    2px 4px 10px rgba(113, 60, 59, 0.28),
-    inset 3px 3px 7px rgba(30, 8, 8, 0.55),
+    2px 4px 10px rgba(113, 60, 59, 0.28), inset 3px 3px 7px rgba(30, 8, 8, 0.55),
     inset -2px -2px 4px rgba(255, 255, 255, 0.2);
 
   /* 3. Clay Rose (selected sizes, category chips, active badges) */
   --clay-rose-bg: linear-gradient(145deg, #f3e5df, #e5d3cb);
   --clay-rose-shadow:
-    4px 7px 16px rgba(115, 103, 94, 0.13),
-    -3px -3px 9px rgba(255, 255, 255, 0.9),
-    inset 2px 2px 3px rgba(255, 255, 255, 0.9),
-    inset -2px -2px 5px rgba(113, 60, 59, 0.14);
+    4px 7px 16px rgba(115, 103, 94, 0.13), -3px -3px 9px rgba(255, 255, 255, 0.9),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.9), inset -2px -2px 5px rgba(113, 60, 59, 0.14);
 
   /* 4. Clay Inset (inputs, textareas, search bars, counter tracks) */
   --clay-inset:
-    inset 2px 3px 6px rgba(115, 103, 94, 0.11),
-    inset -2px -2px 5px rgba(255, 255, 255, 0.85);
+    inset 2px 3px 6px rgba(115, 103, 94, 0.11), inset -2px -2px 5px rgba(255, 255, 255, 0.85);
   --clay-inset-focus:
-    inset 2px 3px 6px rgba(113, 60, 59, 0.16),
-    inset -2px -2px 5px rgba(255, 255, 255, 0.95),
+    inset 2px 3px 6px rgba(113, 60, 59, 0.16), inset -2px -2px 5px rgba(255, 255, 255, 0.95),
     0 0 0 3px rgba(113, 60, 59, 0.15);
 }
 * {
@@ -270,7 +256,9 @@ small,
   font-weight: 500;
 }
 .site-nav a {
-  transition: color 0.18s, transform 0.18s;
+  transition:
+    color 0.18s,
+    transform 0.18s;
 }
 .site-nav a:hover,
 .text-link:hover {
@@ -612,6 +600,10 @@ small,
 .product-visual > svg,
 .product-visual > .product-monogram {
   visibility: hidden;
+}
+.product-visual.has-photo {
+  background-position: center;
+  background-size: cover;
 }
 .coffee {
   background-color: #e8d6bb;
@@ -1531,8 +1523,8 @@ tr:hover td {
   margin-bottom: 18px;
 }
 
-.check-field input[type="checkbox"],
-.check-field input[type="radio"] {
+.check-field input[type='checkbox'],
+.check-field input[type='radio'] {
   width: 18px;
   height: 18px;
   padding: 0;
@@ -1552,6 +1544,256 @@ tr:hover td {
 .recipe-row input {
   width: 100%;
 }
+/* Web catalog administration */
+.catalog-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  background:
+    radial-gradient(circle at 86% 8%, rgba(234, 217, 210, 0.7), transparent 32%), var(--cream-50);
+}
+.catalog-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 34px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 42px;
+  color: white;
+  background: #402f2b;
+}
+.catalog-sidebar .wordmark {
+  color: white;
+  font-size: 31px;
+}
+.catalog-sidebar .wordmark span {
+  color: rgba(255, 255, 255, 0.62);
+}
+.catalog-sidebar nav {
+  display: grid;
+  gap: 8px;
+}
+.catalog-sidebar nav button {
+  width: 100%;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.catalog-sidebar nav button svg {
+  width: 18px;
+}
+.catalog-sidebar nav button:hover,
+.catalog-sidebar nav button.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.catalog-sidebar > p {
+  margin-top: auto;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+.catalog-main {
+  width: min(1180px, 100%);
+  padding: 42px clamp(24px, 5vw, 72px);
+}
+.catalog-header,
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.catalog-header {
+  margin-bottom: 28px;
+}
+.catalog-header h1 {
+  margin: 4px 0 0;
+  font: 500 clamp(30px, 4vw, 44px)/1.1 var(--font-display);
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.metric-card {
+  padding: 24px;
+  display: grid;
+  border-radius: 18px;
+  background: var(--glass-bg-elevated);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.metric-card > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+.metric-card strong {
+  margin: 10px 0 3px;
+  font-size: 36px;
+  line-height: 1;
+}
+.metric-card small,
+.catalog-product-card small {
+  color: var(--muted);
+}
+.catalog-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+.catalog-product-card {
+  min-width: 0;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 145px 1fr;
+  gap: 18px;
+  border-radius: 16px;
+  background: var(--cream-50);
+  border: 1px solid var(--border);
+}
+.catalog-product-image {
+  min-height: 145px;
+  background-image: url('/drinks.png');
+  background-repeat: no-repeat;
+  background-size: 300% 200%;
+  border-radius: 12px;
+}
+.catalog-product-image[style] {
+  background-position: center;
+  background-size: cover;
+}
+.catalog-product-card h3 {
+  margin: 3px 0 5px;
+  font-size: 18px;
+}
+.catalog-product-card p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.catalog-product-card strong,
+.catalog-product-card small {
+  display: block;
+  margin-bottom: 9px;
+}
+.simple-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+.simple-list article {
+  padding: 15px 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-radius: 13px;
+  background: var(--cream-50);
+  border: 1px solid var(--border);
+}
+.simple-list p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.catalog-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  padding: 28px;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  background: rgba(35, 27, 23, 0.68);
+  backdrop-filter: blur(8px);
+}
+.catalog-editor {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 56px);
+  padding: 28px;
+  overflow: auto;
+  border-radius: 20px;
+  background: var(--cream-50);
+  box-shadow: 0 24px 80px rgba(20, 12, 9, 0.3);
+}
+.catalog-editor.compact {
+  width: min(620px, 100%);
+}
+.catalog-image-upload {
+  margin: 22px 0 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px dashed var(--stone-500);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.catalog-image-upload .catalog-product-image {
+  width: 116px;
+  min-width: 116px;
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+}
+.catalog-image-upload span,
+.catalog-image-upload small {
+  display: block;
+}
+.catalog-image-upload small {
+  color: var(--muted);
+}
+.catalog-image-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.catalog-editor fieldset {
+  margin: 18px 0;
+  padding: 0;
+  border: 0;
+}
+.catalog-editor legend {
+  margin-bottom: 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.form-grid.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+.catalog-active {
+  align-self: end;
+  min-height: 48px;
+}
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.catalog-loading {
+  min-height: 100vh;
+  padding: 30px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
 @media (min-width: 1500px) {
   .hero-copy {
     padding-top: 95px;
@@ -1565,6 +1807,9 @@ tr:hover td {
 }
 
 @media (max-width: 1100px) {
+  .catalog-product-grid {
+    grid-template-columns: 1fr;
+  }
   .site-nav {
     gap: 18px;
     font-size: 11px;
@@ -1612,6 +1857,54 @@ tr:hover td {
 }
 
 @media (max-width: 760px) {
+  .catalog-shell {
+    display: block;
+  }
+  .catalog-sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    padding: 18px;
+    gap: 16px;
+  }
+  .catalog-sidebar nav {
+    grid-template-columns: repeat(4, max-content);
+    overflow-x: auto;
+  }
+  .catalog-sidebar nav button {
+    padding: 9px 11px;
+  }
+  .catalog-sidebar > p {
+    display: none;
+  }
+  .catalog-main {
+    padding: 26px 18px;
+  }
+  .catalog-header,
+  .section-heading {
+    align-items: flex-start;
+  }
+  .summary-grid,
+  .catalog-product-grid,
+  .form-grid.three,
+  .check-grid {
+    grid-template-columns: 1fr;
+  }
+  .catalog-product-card {
+    grid-template-columns: 112px 1fr;
+  }
+  .catalog-product-image {
+    min-height: 112px;
+  }
+  .catalog-overlay {
+    padding: 0;
+    align-items: end;
+  }
+  .catalog-editor {
+    max-height: 94vh;
+    padding: 22px 18px;
+    border-radius: 20px 20px 0 0;
+  }
   .site-header {
     height: 87px;
     padding: 0 6%;

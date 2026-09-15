@@ -1,6 +1,6 @@
 # Lattecito Coffee
 
-Web pública en Vercel y administración POS local con Next.js, React, TypeScript y SQLite. Sin conexiones a Supabase ni Render.
+Web pública en Vercel, administración web privada del catálogo y POS local con Next.js, React, TypeScript, Vercel Blob y SQLite. Sin conexiones a Supabase ni Render.
 
 ## Ejecutar
 
@@ -17,11 +17,19 @@ En otra terminal:
 npm run dev:admin
 ```
 
+Para revisar la administración web del catálogo en otra terminal:
+
+```sh
+npm run dev:catalog-admin
+```
+
 - Web: http://127.0.0.1:3000
-- Administración: http://127.0.0.1:3001
+- POS y operación local: http://127.0.0.1:3001
+- Administración web del catálogo: http://127.0.0.1:3002
 - Cada aplicación tiene proceso, puerto y directorio de compilación propios.
 - El proceso público bloquea `/admin` y `/api/admin`. El proceso administrativo exige acceso desde el equipo local y contraseña; la primera visita permite crearla. La sesión dura 8 horas y los intentos fallidos se limitan.
 - Los dos procesos comparten **solo localmente** el archivo `data/lattecito.sqlite`.
+- La administración web usa Vercel Blob cuando está desplegada. En local puede abrir la copia publicada, pero necesita `BLOB_READ_WRITE_TOKEN` para guardar o subir imágenes.
 
 ## Operación
 
@@ -37,7 +45,8 @@ npm run dev:admin
 
 ## Qué incluye
 
-- Portada, menú filtrable, búsqueda, tamaños, extras, cantidades, carrito persistente y enlace de WhatsApp a los dos números indicados. El carrito separa combinaciones con extras diferentes y revisa el catálogo al abrirse; no permite enviar artículos con extras retirados.
+- Portada, menú filtrable, búsqueda, tamaños, extras, cantidades, carrito persistente y enlace de WhatsApp a los dos números indicados. El carrito separa combinaciones con extras diferentes y revisa el catálogo al abrirse; no permite enviar artículos con extras retirados. El mensaje de WhatsApp incluye cantidad, bebida, tamaño, extras y notas, sin precios ni total; termina solicitando confirmación de disponibilidad y tiempo.
+- Administración web separada para crear y editar bebidas, categoría, descripción, fotografía, precios por tamaño, disponibilidad, extras, teléfonos, dirección y horarios.
 - Productos editables, recetas por tamaño, insumos, entradas/salidas con historial, extras, caja, descuentos, efectivo/cambio, tickets imprimibles, historial, cola de preparación y cortes.
 - Margen bruto estimado a partir del costo de receta guardado en cada venta; no equivale a utilidad neta y requiere costos completos.
 - Diseño adaptable a escritorio y móvil; tipografías y fotografías conceptuales guardadas localmente.
@@ -68,9 +77,12 @@ npm test
 npm run typecheck
 npm run build
 npm run build:admin
+npm run build:catalog-admin
 npm start
 # Otra terminal:
 npm run start:admin
+# Otra terminal:
+npm run start:catalog-admin
 ```
 
 Prueba de integración, después de compilar ambas aplicaciones:
@@ -81,9 +93,11 @@ node scripts/integration.mjs
 
 La prueba usa puertos 3100/3101 y una base aislada bajo `test-results/`; no modifica la base del negocio. Comprueba acceso, aislamiento de puertos, protección de origen, lectura pública, receta, pago, reintentos simultáneos, inventario insuficiente, comanda y corte.
 
-## Separación futura por subdominio
+## Separación de aplicaciones
 
-`APP_SURFACE=public` y `APP_SURFACE=admin` seleccionan los accesos y la compilación. El script de ejecución configura esta variable. El subdominio administrativo deberá seguir protegido por autenticación y una política de acceso explícita; ocultar la URL no basta.
+`APP_SURFACE=public`, `APP_SURFACE=admin` y `APP_SURFACE=catalog-admin` seleccionan los accesos y la compilación. Cada superficie bloquea las rutas de las otras aplicaciones.
+
+La administración web se despliega como un proyecto Vercel separado y se protege con Vercel Authentication. Solo las cuentas de Vercel autorizadas en el proyecto pueden entrar. El POS local conserva ventas, caja, inventario, recetas y costos; esos datos no se publican ni se sincronizan con el catálogo web.
 
 El POS usa SQLite en disco y solo escucha en `127.0.0.1`. Antes de alojarlo en un subdominio se requiere una estrategia de datos persistentes compartidos/API y acceso HTTPS. SQLite y la administración se bloquean explícitamente en Vercel, incluso si una variable se configura por error. La web desplegada usa únicamente el catálogo público exportado.
 
@@ -91,16 +105,26 @@ El POS usa SQLite en disco y solo escucha en `127.0.0.1`. Antes de alojarlo en u
 
 El proyecto Vercel se conecta al repositorio `azucardefrutas/Lattecito-coffe`, rama de producción `main`, raíz del repositorio, framework Next.js y compilación `npm run build`.
 
-Variables para **Production** y **Preview**:
+Variables del proyecto público para **Production** y **Preview**:
 
-| Variable                 | Valor      | Uso                                            |
-| ------------------------ | ---------- | ---------------------------------------------- |
-| `APP_SURFACE`            | `public`   | Mantiene cerradas las rutas de administración. |
-| `LATTECITO_CATALOG_MODE` | `snapshot` | Sirve la copia pública sin abrir SQLite.       |
+| Variable                 | Valor    | Uso                                            |
+| ------------------------ | -------- | ---------------------------------------------- |
+| `APP_SURFACE`            | `public` | Mantiene cerradas las rutas de administración. |
+| `LATTECITO_CATALOG_MODE` | `blob`   | Lee el catálogo compartido publicado.          |
 
-No se necesitan claves privadas ni conexión a una base de datos para esta publicación. `LATTECITO_DATA_DIR` pertenece exclusivamente al POS local y no debe configurarse en Vercel. Tampoco deben subirse archivos `.env`, la carpeta `data/` ni la base de pruebas. Se excluyen en Git y en los archivos del despliegue.
+Variables del proyecto administrativo para **Production** y **Preview**:
 
-Para actualizar el menú publicado después de editarlo en el POS:
+| Variable                | Valor           | Uso                                              |
+| ----------------------- | --------------- | ------------------------------------------------ |
+| `APP_SURFACE`           | `catalog-admin` | Publica solamente el administrador del catálogo. |
+| `CATALOG_ADMIN_ENABLED` | `true`          | Habilita su página y API.                        |
+| `BLOB_READ_WRITE_TOKEN` | Vercel          | Viene de la conexión al mismo almacén Blob.      |
+
+Los proyectos público y administrativo se conectan al mismo almacén público Vercel Blob: el JSON contiene solamente datos visibles del menú y las fotografías necesitan URL pública. El acceso de escritura queda dentro del proyecto administrativo protegido; el token nunca se expone al navegador.
+
+`LATTECITO_DATA_DIR` pertenece exclusivamente al POS local y no debe configurarse en Vercel. Tampoco deben subirse archivos `.env`, la carpeta `data/` ni la base de pruebas. Se excluyen en Git y en los archivos del despliegue.
+
+La administración web actualiza el catálogo inmediatamente sin volver a desplegar. Como respaldo inicial o publicación manual todavía puede exportarse desde el POS:
 
 ```sh
 npm run menu:export

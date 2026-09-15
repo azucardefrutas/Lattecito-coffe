@@ -65,12 +65,13 @@ function makeSale(s: Store, payment = 'Efectivo') {
   s.sales.push(sale);
   return sale;
 }
-test('public menu, POS and WhatsApp use the same extra total', () => {
+test('public menu and POS share totals while WhatsApp lists extras without prices', () => {
   const s = fixture(),
     lines = [{ productId: 'matcha', size: 2, quantity: 2, modifierIds: ['extra'] }];
   assert.equal(calculate(s.products, lines, 0, s.modifiers).total, quoteSale(s, lines, 0).total);
-  assert.match(whatsappText(s.products, lines, '', s.modifiers), /Leche extra/);
-  assert.match(whatsappText(s.products, lines, '', s.modifiers), /320/);
+  const text = whatsappText(s.products, lines, '', s.modifiers);
+  assert.match(text, /Leche extra/);
+  assert.doesNotMatch(text, /\$|Total:|c\/u|320/);
 });
 test('inactive and incompatible extras are rejected in both channels', () => {
   for (const mods of [

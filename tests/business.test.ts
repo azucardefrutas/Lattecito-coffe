@@ -125,7 +125,7 @@ test('cash excludes cards and other shifts', () => {
     discount: 0,
     total: 10000,
     cost: 0,
-    payment: 'Efectivo' ,
+    payment: 'Efectivo',
     received: 10000,
     change: 0,
   };
@@ -136,14 +136,14 @@ test('cash excludes cards and other shifts', () => {
   ];
   assert.equal(expectedCash(s, cash), 60000);
 });
-test('WhatsApp has correct quantities total and confirmation wording', () => {
+test('WhatsApp has quantities and confirmation wording without prices', () => {
   const text = whatsappText(
     initialProducts,
     [{ productId: 'matcha', size: 2, quantity: 2 }],
     'Sin azúcar',
   );
   assert.match(text, /2 × Matcha latte/);
-  assert.match(text, /300/);
+  assert.doesNotMatch(text, /\$|Total:|c\/u|300/);
   assert.match(text, /Sin azúcar/);
   assert.match(text, /confirman disponibilidad/);
 });
