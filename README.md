@@ -1,6 +1,6 @@
 # Lattecito Coffee
 
-Web pública en Vercel, administración web privada del catálogo y POS local con Next.js, React, TypeScript, Vercel Blob y SQLite. Sin conexiones a Supabase ni Render.
+Web pública en Vercel, administración web privada, POS local y aplicación móvil Expo. Supabase centraliza catálogo, imágenes, costos y ventas móviles; SQLite conserva la operación local existente.
 
 ## Ejecutar
 
@@ -29,7 +29,7 @@ npm run dev:catalog-admin
 - Cada aplicación tiene proceso, puerto y directorio de compilación propios.
 - El proceso público bloquea `/admin` y `/api/admin`. El proceso administrativo exige acceso desde el equipo local y contraseña; la primera visita permite crearla. La sesión dura 8 horas y los intentos fallidos se limitan.
 - Los dos procesos comparten **solo localmente** el archivo `data/lattecito.sqlite`.
-- La administración web usa Vercel Blob cuando está desplegada. En local puede abrir la copia publicada, pero necesita `BLOB_READ_WRITE_TOKEN` para guardar o subir imágenes.
+- La administración web usa Supabase cuando está desplegada. En local muestra el acceso privado y necesita las variables de Supabase para leer, guardar o subir imágenes.
 
 ## Operación
 
@@ -47,6 +47,7 @@ npm run dev:catalog-admin
 
 - Portada, menú filtrable, búsqueda, tamaños, extras, cantidades, carrito persistente y enlace de WhatsApp a los dos números indicados. El carrito separa combinaciones con extras diferentes y revisa el catálogo al abrirse; no permite enviar artículos con extras retirados. El mensaje de WhatsApp incluye cantidad, bebida, tamaño, extras y notas, sin precios ni total; termina solicitando confirmación de disponibilidad y tiempo.
 - Administración web separada para crear y editar bebidas, categoría, descripción, fotografía, precios por tamaño, disponibilidad, extras, teléfonos, dirección y horarios.
+- Aplicación Android para resumen diario, caja rápida con botón `+`, efectivo y cambio, transferencias en espera, confirmación de depósitos, costos, ganancia bruta y tickets virtuales compartibles.
 - Productos editables, recetas por tamaño, insumos, entradas/salidas con historial, extras, caja, descuentos, efectivo/cambio, tickets imprimibles, historial, cola de preparación y cortes.
 - Margen bruto estimado a partir del costo de receta guardado en cada venta; no equivale a utilidad neta y requiere costos completos.
 - Diseño adaptable a escritorio y móvil; tipografías y fotografías conceptuales guardadas localmente.
@@ -97,9 +98,9 @@ La prueba usa puertos 3100/3101 y una base aislada bajo `test-results/`; no modi
 
 `APP_SURFACE=public`, `APP_SURFACE=admin` y `APP_SURFACE=catalog-admin` seleccionan los accesos y la compilación. Cada superficie bloquea las rutas de las otras aplicaciones.
 
-La administración web se despliega como un proyecto Vercel separado y se protege con Vercel Authentication. Solo las cuentas de Vercel autorizadas en el proyecto pueden entrar. El POS local conserva ventas, caja, inventario, recetas y costos; esos datos no se publican ni se sincronizan con el catálogo web.
+La administración web se despliega como un proyecto Vercel separado. Su formulario privado usa las mismas cuentas administrativas que la aplicación móvil, con sesión firmada, cookie `HttpOnly` y límite de intentos almacenado en Supabase. Las contraseñas se configuran como hashes con sal y nunca se guardan en Git.
 
-El POS usa SQLite en disco y solo escucha en `127.0.0.1`. Antes de alojarlo en un subdominio se requiere una estrategia de datos persistentes compartidos/API y acceso HTTPS. SQLite y la administración se bloquean explícitamente en Vercel, incluso si una variable se configura por error. La web desplegada usa únicamente el catálogo público exportado.
+El POS de escritorio sigue usando SQLite en disco y sólo escucha en `127.0.0.1`. La app móvil guarda sus ventas, transferencias, costos y tickets en Supabase mediante las rutas seguras del proyecto público. El navegador y la app nunca reciben la clave secreta de Supabase.
 
 ## Publicación de la web en Vercel
 
@@ -110,7 +111,12 @@ Variables del proyecto público para **Production** y **Preview**:
 | Variable                 | Valor    | Uso                                            |
 | ------------------------ | -------- | ---------------------------------------------- |
 | `APP_SURFACE`            | `public` | Mantiene cerradas las rutas de administración. |
-| `LATTECITO_CATALOG_MODE` | `blob`   | Lee el catálogo compartido publicado.          |
+| `LATTECITO_CATALOG_MODE` | `supabase` | Lee el catálogo central de Supabase.          |
+| `SUPABASE_URL` | URL del proyecto | Conecta el servidor con Supabase. |
+| `SUPABASE_SECRET_KEY` | Secreto | Acceso exclusivo del servidor; nunca `NEXT_PUBLIC`. |
+| `MOBILE_ADMIN_ENABLED` | `true` | Habilita la API de la aplicación móvil. |
+| `MOBILE_ADMIN_AUTH_SECRET` | Secreto aleatorio | Firma sesiones por ocho horas. |
+| `MOBILE_ADMIN_USERS_JSON` | Hashes | Cuentas administrativas sin contraseñas en texto. |
 
 Variables del proyecto administrativo para **Production** y **Preview**:
 
@@ -118,9 +124,12 @@ Variables del proyecto administrativo para **Production** y **Preview**:
 | ----------------------- | --------------- | ------------------------------------------------ |
 | `APP_SURFACE`           | `catalog-admin` | Publica solamente el administrador del catálogo. |
 | `CATALOG_ADMIN_ENABLED` | `true`          | Habilita su página y API.                        |
-| `BLOB_READ_WRITE_TOKEN` | Vercel          | Viene de la conexión al mismo almacén Blob.      |
+| `SUPABASE_URL` | URL del proyecto | Conecta el catálogo central. |
+| `SUPABASE_SECRET_KEY` | Secreto | Lee, edita y almacena imágenes desde el servidor. |
+| `MOBILE_ADMIN_AUTH_SECRET` | Mismo secreto | Valida las sesiones administrativas. |
+| `MOBILE_ADMIN_USERS_JSON` | Mismos hashes | Habilita las cuentas autorizadas. |
 
-Los proyectos público y administrativo se conectan al mismo almacén público Vercel Blob: el JSON contiene solamente datos visibles del menú y las fotografías necesitan URL pública. El acceso de escritura queda dentro del proyecto administrativo protegido; el token nunca se expone al navegador.
+Los proyectos público y administrativo se conectan al mismo proyecto Supabase. Las tablas tienen RLS activado sin políticas públicas; sólo la clave secreta del servidor puede modificarlas. El bucket público contiene únicamente imágenes del menú y limita formatos y tamaño.
 
 `LATTECITO_DATA_DIR` pertenece exclusivamente al POS local y no debe configurarse en Vercel. Tampoco deben subirse archivos `.env`, la carpeta `data/` ni la base de pruebas. Se excluyen en Git y en los archivos del despliegue.
 
@@ -135,6 +144,18 @@ La exportación lee la base local sin modificarla y selecciona solamente nombres
 
 La web local continúa leyendo el catálogo del POS mientras `LATTECITO_CATALOG_MODE` esté sin definir o sea `local`. El catálogo exportado mantiene el aviso de muestra hasta que el negocio confirme sus productos y precios.
 
-Pendientes para fases posteriores: app nativa Expo, acceso desde otros dispositivos, sincronización fuera de este equipo, roles por empleado, devoluciones parciales, impuestos/facturación, integración con terminales/Stripe, impresión térmica directa y notificaciones push. La impresión actual usa el diálogo normal del navegador; la vista de barra puede abrirse en otra pestaña del mismo equipo.
+## Aplicación móvil
+
+La app se encuentra en `mobile-admin/`. Usa `EXPO_PUBLIC_API_URL` únicamente para la dirección pública de la API; los tokens se guardan con SecureStore y las claves de Supabase permanecen en Vercel.
+
+```sh
+cd mobile-admin
+npm install
+npx expo start
+npx expo export --platform android
+npx eas-cli build --platform android --profile preview
+```
+
+Pendientes para fases posteriores: sincronizar el inventario detallado y recetas del POS local con Supabase, devoluciones parciales, impuestos/facturación, integración con terminales, impresión térmica directa y notificaciones push. La impresión local actual usa el diálogo normal del navegador; la vista de barra puede abrirse en otra pestaña del mismo equipo.
 
 Referencia de composición solicitada: https://www.starbucks.com.mx/ . Identidad visual propia en crema, vino suave y café.

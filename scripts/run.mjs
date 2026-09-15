@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process';
-const [surface = 'public', command = 'dev'] = process.argv.slice(2);
+const [requestedSurface = 'public', command = 'dev'] = process.argv.slice(2);
+const surface = process.env.VERCEL
+  ? (process.env.APP_SURFACE ?? requestedSurface)
+  : requestedSurface;
 if (
   !['public', 'admin', 'catalog-admin'].includes(surface) ||
   !['dev', 'build', 'start'].includes(command)

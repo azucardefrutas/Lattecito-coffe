@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Coffee,
   ImagePlus,
@@ -9,12 +9,14 @@ import {
   RefreshCw,
   Save,
   Settings2,
+  ShieldCheck,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { money, sizes } from '@/lib/model';
 import type { CatalogModifier, CatalogProduct, PublicCatalog } from '@/lib/catalog-schema';
 
-type View = 'summary' | 'products' | 'extras' | 'business';
+type View = 'summary' | 'products' | 'extras' | 'business' | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
 const blankProduct = (): CatalogProduct => ({
   id: crypto.randomUUID(),
@@ -36,7 +38,11 @@ const blankModifier = (): CatalogModifier => ({
 export default function CatalogAdmin() {
   const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
   const [etag, setEtag] = useState<string | null>(null);
-  const [source, setSource] = useState<'blob' | 'snapshot'>('snapshot');
+  const [source, setSource] = useState<'supabase' | 'snapshot'>('snapshot');
+  const [adminUser, setAdminUser] = useState<{ username: string; role: 'admin' | 'developer' } | null>(null);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [view, setView] = useState<View>('summary');
   const [product, setProduct] = useState<CatalogProduct | null>(null);
   const [modifier, setModifier] = useState<CatalogModifier | null>(null);
@@ -51,16 +57,51 @@ export default function CatalogAdmin() {
     try {
       const response = await fetch('/api/catalog-admin', { cache: 'no-store' });
       const result = await response.json();
+      if (response.status === 401) {
+        setAuthRequired(true);
+        setCatalog(null);
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? 'No fue posible cargar el catálogo.');
       setCatalog(result.catalog);
       setEtag(result.etag);
       setSource(result.source);
+      setAdminUser(result.user);
+      setAuthRequired(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar el catálogo.');
     } finally {
       setBusy(false);
     }
   }, []);
+
+  async function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/api/catalog-admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'No fue posible iniciar sesión.');
+      setPassword('');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible iniciar sesión.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signOut() {
+    await fetch('/api/catalog-admin/auth', { method: 'DELETE' });
+    setCatalog(null);
+    setAdminUser(null);
+    setAuthRequired(true);
+  }
 
   useEffect(() => {
     void load();
@@ -80,7 +121,7 @@ export default function CatalogAdmin() {
       if (!response.ok) throw new Error(result.error ?? 'No fue posible guardar el cambio.');
       setCatalog(result.catalog);
       setEtag(result.etag);
-      setSource('blob');
+      setSource(result.source);
       setNotice(message);
       return true;
     } catch (cause) {
@@ -137,6 +178,41 @@ export default function CatalogAdmin() {
     if (await save(next, exists ? 'Extra actualizado.' : 'Extra agregado.')) setModifier(null);
   }
 
+  if (authRequired)
+    return (
+      <main className="catalog-loading">
+        <Coffee size={38} />
+        <span className="eyebrow">LATTECITO · ACCESO PRIVADO</span>
+        <h1>Administración del menú</h1>
+        <p>Inicia sesión con una cuenta autorizada.</p>
+        <form className="catalog-login-form" onSubmit={signIn}>
+          <label>
+            Usuario
+            <input
+              autoComplete="username"
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              value={username}
+            />
+          </label>
+          <label>
+            Contraseña
+            <input
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              type="password"
+              value={password}
+            />
+          </label>
+          {error && <p className="notice error">{error}</p>}
+          <button className="button" disabled={busy} type="submit">
+            {busy ? 'Validando…' : 'Entrar'}
+          </button>
+        </form>
+      </main>
+    );
+
   if (!catalog)
     return (
       <main className="catalog-loading">
@@ -182,8 +258,17 @@ export default function CatalogAdmin() {
             label="Negocio"
             onClick={() => setView('business')}
           />
+          <Nav
+            active={view === 'permissions'}
+            icon={<Users />}
+            label="Permisos"
+            onClick={() => setView('permissions')}
+          />
         </nav>
-        <p>Acceso protegido por tu cuenta de Vercel.</p>
+        <div className="catalog-session">
+          <p>{adminUser?.username} · {adminUser?.role === 'developer' ? 'Desarrollador' : 'Administrador'}</p>
+          <button onClick={() => void signOut()}>Cerrar sesión</button>
+        </div>
       </aside>
 
       <main className="catalog-main">
@@ -197,7 +282,9 @@ export default function CatalogAdmin() {
                   ? 'Menú'
                   : view === 'extras'
                     ? 'Extras'
-                    : 'Datos del negocio'}
+                    : view === 'business'
+                      ? 'Datos del negocio'
+                      : 'Permisos'}
             </h1>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
@@ -353,6 +440,8 @@ export default function CatalogAdmin() {
             onSave={(settings) => save({ ...catalog, settings }, 'Datos del negocio actualizados.')}
           />
         )}
+
+        {view === 'permissions' && <PermissionsPanel />}
       </main>
 
       {product && (
@@ -380,6 +469,42 @@ export default function CatalogAdmin() {
         />
       )}
     </div>
+  );
+}
+
+function PermissionsPanel() {
+  return (
+    <section className="panel">
+      <span className="eyebrow">ACCESO AL ADMINISTRADOR</span>
+      <h2>Perfiles definidos</h2>
+      <p className="permissions-intro">
+        Esta etapa conserva las cuentas como guía local. El acceso en línea se valida con Vercel
+        Authentication y tu cuenta de desarrollador.
+      </p>
+      <div className="permission-grid">
+        <article>
+          <Users size={22} />
+          <div>
+            <strong>Administrador del catálogo</strong>
+            <span>3 cuentas documentadas</span>
+            <p>Puede editar bebidas, fotografías, descripciones, precios, extras y negocio.</p>
+          </div>
+        </article>
+        <article>
+          <ShieldCheck size={22} />
+          <div>
+            <strong>Desarrollador</strong>
+            <span>1 cuenta documentada</span>
+            <p>Acceso técnico completo al proyecto, despliegues, almacenamiento y configuración.</p>
+          </div>
+        </article>
+      </div>
+      <p className="notice">
+        Las contraseñas no se publican en GitHub ni se envían al navegador. Para activar estas
+        cuentas como inicio de sesión propio se requiere autenticación persistente en una etapa
+        posterior.
+      </p>
+    </section>
   );
 }
 

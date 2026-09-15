@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { catalogSchema } from '@/lib/catalog-schema';
 import { CatalogConflictError, readCloudCatalog, saveCloudCatalog } from '@/lib/cloud-catalog';
+import { uploadProductImage } from '@/lib/supabase-store';
+import { webAdminUser } from '@/lib/mobile-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,11 +25,13 @@ function sameOrigin(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!available()) return new NextResponse('No encontrado', { status: 404 });
+  const user = webAdminUser(request);
+  if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   try {
     const result = await readCloudCatalog();
-    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ...result, user }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('No fue posible leer el catálogo web.', error);
     return NextResponse.json({ error: 'No fue posible cargar el catálogo.' }, { status: 503 });
@@ -38,6 +40,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   if (!available()) return new NextResponse('No encontrado', { status: 404 });
+  const user = webAdminUser(request);
+  if (!user) return NextResponse.json({ error: 'Inicia sesión.' }, { status: 401 });
   if (!sameOrigin(request))
     return NextResponse.json({ error: 'Origen no permitido.' }, { status: 403 });
   try {
@@ -56,13 +60,7 @@ export async function POST(request: NextRequest) {
       };
       const extension = extensions[image.type];
       if (!extension) throw new Error('Usa una imagen JPG, PNG, WebP o AVIF.');
-      const blob = await put(`lattecito/products/${randomUUID()}.${extension}`, image, {
-        access: 'public',
-        addRandomSuffix: true,
-        contentType: image.type,
-        cacheControlMaxAge: 31_536_000,
-      });
-      return NextResponse.json({ imageUrl: blob.url });
+      return NextResponse.json({ imageUrl: await uploadProductImage(image, extension) });
     }
 
     const input = z
@@ -74,7 +72,11 @@ export async function POST(request: NextRequest) {
         'El menú cambió en otra pestaña. Actualiza los datos y vuelve a intentar.',
       );
     const saved = await saveCloudCatalog(input.catalog, current.etag);
-    return NextResponse.json({ catalog: input.catalog, etag: saved.etag, source: 'blob' });
+    return NextResponse.json({
+      catalog: input.catalog,
+      etag: saved.etag,
+      source: 'supabase',
+    });
   } catch (error) {
     if (error instanceof CatalogConflictError)
       return NextResponse.json({ error: error.message }, { status: 409 });

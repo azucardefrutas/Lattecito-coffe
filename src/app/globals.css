@@ -1596,10 +1596,23 @@ tr:hover td {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.1);
 }
-.catalog-sidebar > p {
+.catalog-session {
   margin-top: auto;
+}
+.catalog-session p {
+  margin: 0 0 10px;
   color: rgba(255, 255, 255, 0.58);
   font-size: 12px;
+}
+.catalog-session button {
+  padding: 0;
+  color: white;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .catalog-main {
   width: min(1180px, 100%);
@@ -1793,6 +1806,72 @@ tr:hover td {
   justify-items: center;
   text-align: center;
 }
+.catalog-login-form {
+  width: min(390px, 100%);
+  margin-top: 14px;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  text-align: left;
+  background: var(--cream-50);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow);
+}
+.catalog-login-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.catalog-login-form input {
+  width: 100%;
+  padding: 13px 14px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+}
+.permissions-intro {
+  max-width: 700px;
+  color: var(--muted);
+}
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+}
+.permission-grid article {
+  padding: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--cream-50);
+}
+.permission-grid article > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+.permission-grid strong,
+.permission-grid span {
+  display: block;
+}
+.permission-grid span {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.permission-grid p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
 
 @media (min-width: 1500px) {
   .hero-copy {
@@ -1887,7 +1966,8 @@ tr:hover td {
   .summary-grid,
   .catalog-product-grid,
   .form-grid.three,
-  .check-grid {
+  .check-grid,
+  .permission-grid {
     grid-template-columns: 1fr;
   }
   .catalog-product-card {
