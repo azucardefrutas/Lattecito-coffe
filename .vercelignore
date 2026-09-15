@@ -1,0 +1,8 @@
+.git/
+.next/
+.next-admin/
+node_modules/
+data/
+test-results/
+.env*
+*.tsbuildinfo

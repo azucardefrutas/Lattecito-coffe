@@ -1,0 +1,6 @@
+.next
+.next-admin
+node_modules
+data
+test-results
+package-lock.json

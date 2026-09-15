@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.next-admin/
+data/
+.env*
+!.env.example
+*.tsbuildinfo
+test-results/
+.vercel/
+cmd.exe.bat
+
+.vercel
