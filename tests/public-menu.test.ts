@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publicMenu } from '../src/lib/public-menu.ts';
+import { publicMenu, publishCatalog } from '../src/lib/public-menu.ts';
 import { initialProducts, type Store } from '../src/lib/model.ts';
+import type { PublicCatalog } from '../src/lib/catalog-schema.ts';
 import snapshot from '../src/data/public-menu.json' with { type: 'json' };
 
 test('the published catalog excludes internal business data and hidden products/extras', () => {
@@ -66,4 +67,22 @@ test('deployment snapshot contains only the public catalog fields and configured
       'tone',
     ]);
   }
+});
+
+test('cloud publication keeps edited drinks and hides disabled drinks and extras', () => {
+  const catalog = {
+    ...snapshot,
+    products: [
+      { ...snapshot.products[0], name: 'Nuevo latte', prices: [4900, 5900, 6900] },
+      { ...snapshot.products[1], active: false },
+    ],
+    modifiers: [
+      { id: 'shot', name: 'Shot extra', price: 1000, active: true },
+      { id: 'oculto', name: 'Extra oculto', price: 500, active: false },
+    ],
+  } as PublicCatalog;
+  const published = publishCatalog(catalog);
+  assert.deepEqual(published.products.map((product) => product.name), ['Nuevo latte']);
+  assert.deepEqual(published.products[0].prices, [4900, 5900, 6900]);
+  assert.deepEqual(published.modifiers.map((modifier) => modifier.id), ['shot']);
 });

@@ -1,7 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import snapshot from '@/data/public-menu.json';
 import { catalogSchema, type PublicCatalog } from './catalog-schema';
-import { calculate, type Line, type Product } from './model';
+import {
+  inventoryItemInputSchema,
+  inventoryRecipeInputSchema,
+  validateUnitQuantity,
+  type InventoryItem,
+  type InventoryMovement,
+  type InventoryRecipe,
+  type InventoryState,
+} from './inventory-schema';
+import { calculate, sizes, type Line, type Product } from './model';
 
 type UserRole = 'admin' | 'developer';
 
@@ -144,6 +153,163 @@ function saleFromRow(row: Record<string, unknown>): MobileSale {
   };
 }
 
+function itemFromRow(row: Record<string, unknown>): InventoryItem {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    unit: row.unit as InventoryItem['unit'],
+    stock: Number(row.stock),
+    minimum: Number(row.minimum),
+    costPerUnit: Number(row.cost_per_unit),
+    active: Boolean(row.active),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+  };
+}
+
+function recipeFromRow(row: Record<string, unknown>): InventoryRecipe {
+  return inventoryRecipeInputSchema.parse({
+    targetType: row.target_type,
+    targetId: row.target_id,
+    sizeIndex: Number(row.size_index),
+    ingredients: row.ingredients,
+  });
+}
+
+function movementFromRow(row: Record<string, unknown>): InventoryMovement {
+  return {
+    id: String(row.id),
+    itemId: String(row.item_id),
+    quantity: Number(row.quantity),
+    reason: String(row.reason),
+    type: row.movement_type as InventoryMovement['type'],
+    resultingStock: Number(row.resulting_stock),
+    saleId: row.sale_id ? String(row.sale_id) : '',
+    createdBy: String(row.created_by),
+    date: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+export async function readInventoryState(): Promise<InventoryState> {
+  await ensureSupabase();
+  const client = serverClient();
+  const [itemsResult, recipesResult, movementsResult] = await Promise.all([
+    client.from('inventory_items').select('*').order('name'),
+    client.from('inventory_recipes').select('*').order('target_type').order('target_id'),
+    client.from('inventory_movements').select('*').order('created_at', { ascending: false }).limit(100),
+  ]);
+  if (itemsResult.error) throw databaseError('No fue posible leer los insumos.', itemsResult.error);
+  if (recipesResult.error)
+    throw databaseError('No fue posible leer las recetas.', recipesResult.error);
+  if (movementsResult.error)
+    throw databaseError('No fue posible leer los movimientos.', movementsResult.error);
+  const items = (itemsResult.data ?? []).map((row) => itemFromRow(row));
+  const recipes = (recipesResult.data ?? []).map((row) => recipeFromRow(row));
+  const movements = (movementsResult.data ?? []).map((row) => movementFromRow(row));
+  return {
+    items,
+    recipes,
+    movements,
+    summary: {
+      itemCount: items.filter((item) => item.active).length,
+      lowStockCount: items.filter((item) => item.active && item.stock <= item.minimum).length,
+      inventoryValue: Math.round(
+        items.reduce((sum, item) => sum + item.stock * item.costPerUnit, 0),
+      ),
+      configuredRecipes: recipes.filter((recipe) => recipe.ingredients.length > 0).length,
+    },
+  };
+}
+
+export async function saveInventoryItem(input: unknown) {
+  await ensureSupabase();
+  const parsed = inventoryItemInputSchema.parse(input);
+  validateUnitQuantity(parsed.minimum || 1, parsed.unit);
+  const payload = {
+    name: parsed.name,
+    unit: parsed.unit,
+    minimum: parsed.minimum,
+    cost_per_unit: parsed.costPerUnit,
+    active: parsed.active,
+    updated_at: new Date().toISOString(),
+  };
+  const query = parsed.id
+    ? serverClient().from('inventory_items').update(payload).eq('id', parsed.id)
+    : serverClient().from('inventory_items').insert(payload);
+  const { data, error } = await query.select('*').maybeSingle();
+  if (error || !data) throw databaseError('No fue posible guardar el insumo.', error);
+  return itemFromRow(data);
+}
+
+export async function adjustInventoryStock(input: {
+  itemId: string;
+  quantity: number;
+  reason: string;
+  user: MobileUser;
+}) {
+  await ensureSupabase();
+  const { data: current, error: currentError } = await serverClient()
+    .from('inventory_items')
+    .select('unit')
+    .eq('id', input.itemId)
+    .maybeSingle();
+  if (currentError || !current) throw databaseError('Insumo no encontrado.', currentError);
+  validateUnitQuantity(input.quantity, current.unit as InventoryItem['unit'], true);
+  const { data, error } = await serverClient().rpc('adjust_inventory_stock', {
+    p_item_id: input.itemId,
+    p_quantity: input.quantity,
+    p_reason: input.reason.trim(),
+    p_created_by: input.user.username,
+  });
+  if (error) throw new Error(error.message || 'No fue posible ajustar el inventario.');
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('No fue posible ajustar el inventario.');
+  return itemFromRow(row as Record<string, unknown>);
+}
+
+export async function saveInventoryRecipe(input: unknown) {
+  await ensureSupabase();
+  const parsed = inventoryRecipeInputSchema.parse(input);
+  if (
+    (parsed.targetType === 'modifier' && parsed.sizeIndex !== -1) ||
+    (parsed.targetType === 'product' && parsed.sizeIndex < 0)
+  )
+    throw new Error('El tamaño de la receta no es válido.');
+  const { catalog } = await readSupabaseCatalog();
+  const exists =
+    parsed.targetType === 'product'
+      ? catalog.products.some((product) => product.id === parsed.targetId)
+      : catalog.modifiers.some((modifier) => modifier.id === parsed.targetId);
+  if (!exists) throw new Error('El producto o extra de la receta no existe.');
+  if (new Set(parsed.ingredients.map((ingredient) => ingredient.itemId)).size !== parsed.ingredients.length)
+    throw new Error('Un insumo no puede repetirse dentro de la misma receta.');
+  const inventory = await readInventoryState();
+  for (const ingredient of parsed.ingredients) {
+    const item = inventory.items.find((candidate) => candidate.id === ingredient.itemId && candidate.active);
+    if (!item) throw new Error('La receta contiene un insumo inactivo o inexistente.');
+    validateUnitQuantity(ingredient.quantity, item.unit);
+  }
+  const client = serverClient();
+  if (!parsed.ingredients.length) {
+    const deleted = await client
+      .from('inventory_recipes')
+      .delete()
+      .eq('target_type', parsed.targetType)
+      .eq('target_id', parsed.targetId)
+      .eq('size_index', parsed.sizeIndex);
+    if (deleted.error) throw databaseError('No fue posible eliminar la receta.', deleted.error);
+    return parsed;
+  }
+  const { error } = await client.from('inventory_recipes').upsert({
+    target_type: parsed.targetType,
+    target_id: parsed.targetId,
+    size_index: parsed.sizeIndex,
+    ingredients: parsed.ingredients,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw databaseError('No fue posible guardar la receta.', error);
+  return parsed;
+}
+
 export async function createMobileSale(input: {
   id: string;
   user: MobileUser;
@@ -153,39 +319,76 @@ export async function createMobileSale(input: {
   customer: string;
   note: string;
 }) {
-  const [{ catalog }, costs] = await Promise.all([readSupabaseCatalog(), readCosts()]);
-  const quote = calculate(operationalProducts(catalog, costs), input.lines, 0, catalog.modifiers);
+  const client = serverClient();
+  const existing = await client.from('admin_sales').select('*').eq('id', input.id).maybeSingle();
+  if (existing.error) throw databaseError('No fue posible revisar la venta.', existing.error);
+  if (existing.data) return saleFromRow(existing.data);
+  const [{ catalog }, costs, inventory] = await Promise.all([
+    readSupabaseCatalog(),
+    readCosts(),
+    readInventoryState(),
+  ]);
+  const base = calculate(operationalProducts(catalog, costs), input.lines, 0, catalog.modifiers);
+  const recipes = new Map(
+    inventory.recipes.map((recipe) => [
+      `${recipe.targetType}:${recipe.targetId}:${recipe.sizeIndex}`,
+      recipe.ingredients,
+    ]),
+  );
+  const needs = new Map<string, number>();
+  const items = base.items.map((quoted, index) => {
+    const line = input.lines[index];
+    const product = catalog.products.find((candidate) => candidate.id === line.productId)!;
+    const recipe = recipes.get(`product:${line.productId}:${line.size}`) ?? [];
+    const modifierRecipes = (line.modifierIds ?? []).flatMap(
+      (id) => recipes.get(`modifier:${id}:-1`) ?? [],
+    );
+    let recipeCost = 0;
+    for (const ingredient of [...recipe, ...modifierRecipes]) {
+      const item = inventory.items.find(
+        (candidate) => candidate.id === ingredient.itemId && candidate.active,
+      );
+      if (!item)
+        throw new Error(`La receta de ${product.name} contiene un insumo inactivo o inexistente.`);
+      validateUnitQuantity(ingredient.quantity, item.unit);
+      needs.set(
+        item.id,
+        (needs.get(item.id) ?? 0) + ingredient.quantity * line.quantity,
+      );
+      recipeCost += ingredient.quantity * item.costPerUnit;
+    }
+    return { ...quoted, cost: recipe.length || modifierRecipes.length ? Math.round(recipeCost) : quoted.cost };
+  });
+  const quote = {
+    items,
+    subtotal: base.subtotal,
+    total: base.total,
+    cost: items.reduce((sum, item) => sum + item.cost * item.quantity, 0),
+  };
   if (input.payment === 'Efectivo' && input.received < quote.total)
     throw new Error('El efectivo recibido es insuficiente.');
   const status = input.payment === 'Efectivo' ? 'Pagado' : 'Pendiente';
   const received = input.payment === 'Efectivo' ? input.received : quote.total;
   const change = input.payment === 'Efectivo' ? input.received - quote.total : 0;
-  const client = serverClient();
-  const inserted = await client
-    .from('admin_sales')
-    .insert({
-      id: input.id,
-      created_by: input.user.username,
-      customer: input.customer,
-      note: input.note,
-      items: quote.items,
-      subtotal: quote.subtotal,
-      total: quote.total,
-      cost: quote.cost,
-      payment_method: input.payment,
-      payment_status: status,
-      received,
-      change,
-    })
-    .select('*')
-    .single();
-  if (!inserted.error && inserted.data) return saleFromRow(inserted.data);
-  if (inserted.error?.code !== '23505')
-    throw databaseError('No fue posible registrar la venta.', inserted.error);
-  const existing = await client.from('admin_sales').select('*').eq('id', input.id).maybeSingle();
-  if (existing.error || !existing.data)
-    throw databaseError('No fue posible recuperar la venta.', existing.error);
-  return saleFromRow(existing.data);
+  const { data, error } = await client.rpc('create_admin_sale_with_inventory', {
+    p_id: input.id,
+    p_created_by: input.user.username,
+    p_customer: input.customer,
+    p_note: input.note,
+    p_items: quote.items,
+    p_subtotal: quote.subtotal,
+    p_total: quote.total,
+    p_cost: quote.cost,
+    p_payment_method: input.payment,
+    p_payment_status: status,
+    p_received: received,
+    p_change: change,
+    p_consumption: [...needs].map(([itemId, quantity]) => ({ itemId, quantity })),
+  });
+  if (error) throw new Error(error.message || 'No fue posible registrar la venta.');
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('No fue posible registrar la venta.');
+  return saleFromRow(row as Record<string, unknown>);
 }
 
 export async function confirmMobileTransfer(id: string, user: MobileUser) {
@@ -219,7 +422,11 @@ export async function updateProductCosts(productId: string, costs: number[]) {
 }
 
 export async function readMobileDashboard() {
-  const [{ catalog }, costs] = await Promise.all([readSupabaseCatalog(), readCosts()]);
+  const [{ catalog }, costs, inventory] = await Promise.all([
+    readSupabaseCatalog(),
+    readCosts(),
+    readInventoryState(),
+  ]);
   const today = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Cancun',
     year: 'numeric',
@@ -242,6 +449,7 @@ export async function readMobileDashboard() {
   ).length;
   return {
     catalog,
+    inventory,
     costs: Object.fromEntries(catalog.products.map((p) => [p.id, costs.get(p.id) ?? [0, 0, 0]])),
     sales,
     summary: {

@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { mobileUser } from '@/lib/mobile-auth';
 import {
+  adjustInventoryStock,
   confirmMobileTransfer,
   createMobileSale,
   readMobileDashboard,
+  saveInventoryItem,
+  saveInventoryRecipe,
   updateProductCosts,
 } from '@/lib/supabase-store';
+import { inventoryItemInputSchema, inventoryRecipeInputSchema, stockQuantitySchema } from '@/lib/inventory-schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,6 +37,14 @@ const command = z.discriminatedUnion('action', [
     received: cents,
   }),
   z.object({ action: z.literal('confirm-transfer'), saleId: z.uuid() }),
+  z.object({ action: z.literal('inventory-item'), item: inventoryItemInputSchema }),
+  z.object({
+    action: z.literal('inventory-adjust'),
+    itemId: z.uuid(),
+    quantity: stockQuantitySchema.refine((value) => value !== 0),
+    reason: z.string().trim().min(2).max(300),
+  }),
+  z.object({ action: z.literal('inventory-recipe'), recipe: inventoryRecipeInputSchema }),
   z.object({
     action: z.literal('costs'),
     productId: z.string().min(1).max(80),
@@ -72,6 +84,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await createMobileSale({ ...input, user }), { status: 201 });
     if (input.action === 'confirm-transfer')
       return NextResponse.json(await confirmMobileTransfer(input.saleId, user));
+    if (input.action === 'inventory-item')
+      return NextResponse.json(await saveInventoryItem(input.item));
+    if (input.action === 'inventory-adjust')
+      return NextResponse.json(await adjustInventoryStock({ ...input, user }));
+    if (input.action === 'inventory-recipe')
+      return NextResponse.json(await saveInventoryRecipe(input.recipe));
     if (user.role !== 'developer')
       return NextResponse.json({ error: 'Se requiere acceso de desarrollador.' }, { status: 403 });
     await updateProductCosts(input.productId, input.costs);

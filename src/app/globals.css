@@ -1873,6 +1873,180 @@ tr:hover td {
   font-size: 13px;
 }
 
+.inventory-stack {
+  display: grid;
+  gap: 24px;
+}
+.inventory-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+.inventory-summary .metric-card strong {
+  font-size: clamp(25px, 3vw, 34px);
+}
+.inventory-alert {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #71451d;
+  background: #f7e7c2;
+  border: 1px solid #e3c889;
+  border-radius: 12px;
+  font-weight: 700;
+}
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.inventory-card {
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--cream-50);
+}
+.inventory-card.low {
+  border-color: #d49a5e;
+  background: #fff7e8;
+}
+.inventory-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.inventory-card h3 {
+  margin: 12px 0 5px;
+}
+.inventory-card > strong {
+  display: block;
+  font-size: 25px;
+}
+.inventory-card p {
+  margin: 6px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.inventory-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.inventory-form {
+  margin-top: 22px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+.inventory-form.accent {
+  background: #f4ebe0;
+}
+.inventory-form h3 {
+  margin: 4px 0 0;
+}
+.inventory-form > p {
+  color: var(--muted);
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.field-grid label,
+.inventory-target {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.field-grid input,
+.field-grid select,
+.inventory-target select,
+.recipe-add input,
+.recipe-add select {
+  width: 100%;
+  padding: 12px 13px;
+  color: var(--ink);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font: inherit;
+}
+.check-row {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.inventory-target {
+  max-width: 580px;
+  margin: 18px 0;
+}
+.recipe-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.recipe-list > div {
+  padding: 11px 13px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--cream-50);
+}
+.recipe-list button {
+  padding: 0;
+  color: var(--primary);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.recipe-add {
+  margin-bottom: 14px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px auto;
+  gap: 10px;
+}
+.movement-table {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+.movement-table > div {
+  min-width: 760px;
+  padding: 12px 10px;
+  display: grid;
+  grid-template-columns: 155px 1fr 130px 1.5fr 110px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.movement-table .movement-head {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+}
+.movement-table .positive { color: #34734c; font-weight: 800; }
+.movement-table .negative { color: #a84538; font-weight: 800; }
+
 @media (min-width: 1500px) {
   .hero-copy {
     padding-top: 95px;
@@ -1886,6 +2060,11 @@ tr:hover td {
 }
 
 @media (max-width: 1100px) {
+  .inventory-summary,
+  .inventory-grid,
+  .field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .catalog-product-grid {
     grid-template-columns: 1fr;
   }
@@ -1968,6 +2147,12 @@ tr:hover td {
   .form-grid.three,
   .check-grid,
   .permission-grid {
+    grid-template-columns: 1fr;
+  }
+  .inventory-summary,
+  .inventory-grid,
+  .field-grid,
+  .recipe-add {
     grid-template-columns: 1fr;
   }
   .catalog-product-card {

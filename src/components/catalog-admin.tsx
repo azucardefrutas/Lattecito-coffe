@@ -5,6 +5,7 @@ import {
   Coffee,
   ImagePlus,
   LayoutDashboard,
+  PackageOpen,
   Plus,
   RefreshCw,
   Save,
@@ -15,8 +16,9 @@ import {
 } from 'lucide-react';
 import { money, sizes } from '@/lib/model';
 import type { CatalogModifier, CatalogProduct, PublicCatalog } from '@/lib/catalog-schema';
+import InventoryAdmin from '@/components/inventory-admin';
 
-type View = 'summary' | 'products' | 'extras' | 'business' | 'permissions';
+type View = 'summary' | 'products' | 'extras' | 'inventory' | 'business' | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
 const blankProduct = (): CatalogProduct => ({
   id: crypto.randomUUID(),
@@ -51,8 +53,8 @@ export default function CatalogAdmin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const load = useCallback(async () => {
-    setBusy(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setBusy(true);
     setError('');
     try {
       const response = await fetch('/api/catalog-admin', { cache: 'no-store' });
@@ -71,7 +73,7 @@ export default function CatalogAdmin() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible cargar el catálogo.');
     } finally {
-      setBusy(false);
+      if (!silent) setBusy(false);
     }
   }, []);
 
@@ -106,6 +108,19 @@ export default function CatalogAdmin() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (authRequired || !catalog) return;
+    const refresh = () => void load(true);
+    const interval = window.setInterval(refresh, 5_000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [authRequired, catalog, load]);
 
   async function save(next: PublicCatalog, message: string) {
     setBusy(true);
@@ -253,6 +268,12 @@ export default function CatalogAdmin() {
             onClick={() => setView('extras')}
           />
           <Nav
+            active={view === 'inventory'}
+            icon={<PackageOpen />}
+            label="Inventario"
+            onClick={() => setView('inventory')}
+          />
+          <Nav
             active={view === 'business'}
             icon={<Settings2 />}
             label="Negocio"
@@ -282,6 +303,8 @@ export default function CatalogAdmin() {
                   ? 'Menú'
                   : view === 'extras'
                     ? 'Extras'
+                    : view === 'inventory'
+                      ? 'Inventario'
                     : view === 'business'
                       ? 'Datos del negocio'
                       : 'Permisos'}
@@ -441,6 +464,8 @@ export default function CatalogAdmin() {
           />
         )}
 
+        {view === 'inventory' && <InventoryAdmin catalog={catalog} />}
+
         {view === 'permissions' && <PermissionsPanel />}
       </main>
 
@@ -478,8 +503,7 @@ function PermissionsPanel() {
       <span className="eyebrow">ACCESO AL ADMINISTRADOR</span>
       <h2>Perfiles definidos</h2>
       <p className="permissions-intro">
-        Esta etapa conserva las cuentas como guía local. El acceso en línea se valida con Vercel
-        Authentication y tu cuenta de desarrollador.
+        El acceso en línea usa cuentas privadas y contraseñas cifradas configuradas fuera del código.
       </p>
       <div className="permission-grid">
         <article>
@@ -487,7 +511,7 @@ function PermissionsPanel() {
           <div>
             <strong>Administrador del catálogo</strong>
             <span>3 cuentas documentadas</span>
-            <p>Puede editar bebidas, fotografías, descripciones, precios, extras y negocio.</p>
+            <p>Puede editar bebidas, precios, extras, negocio, inventario, movimientos y recetas.</p>
           </div>
         </article>
         <article>
@@ -500,9 +524,8 @@ function PermissionsPanel() {
         </article>
       </div>
       <p className="notice">
-        Las contraseñas no se publican en GitHub ni se envían al navegador. Para activar estas
-        cuentas como inicio de sesión propio se requiere autenticación persistente en una etapa
-        posterior.
+        Las contraseñas no se publican en GitHub ni se envían al navegador. El servidor valida cada
+        sesión y protege los datos de administración.
       </p>
     </section>
   );

@@ -36,11 +36,49 @@ export type Sale = {
   received: number;
   change: number;
 };
+export type InventoryItem = {
+  id: string;
+  name: string;
+  unit: 'g' | 'ml' | 'pieza';
+  stock: number;
+  minimum: number;
+  costPerUnit: number;
+  active: boolean;
+  updatedAt: string;
+};
+export type InventoryRecipe = {
+  targetType: 'product' | 'modifier';
+  targetId: string;
+  sizeIndex: number;
+  ingredients: { itemId: string; quantity: number }[];
+};
+export type InventoryMovement = {
+  id: string;
+  itemId: string;
+  quantity: number;
+  reason: string;
+  type: 'entry' | 'adjustment' | 'sale';
+  resultingStock: number;
+  saleId: string;
+  createdBy: string;
+  date: string;
+};
 export type Dashboard = {
   user: AdminUser;
   catalog: { products: Product[]; modifiers: Modifier[] };
   costs: Record<string, number[]>;
   sales: Sale[];
+  inventory: {
+    items: InventoryItem[];
+    recipes: InventoryRecipe[];
+    movements: InventoryMovement[];
+    summary: {
+      itemCount: number;
+      lowStockCount: number;
+      inventoryValue: number;
+      configuredRecipes: number;
+    };
+  };
   summary: {
     total: number;
     cash: number;

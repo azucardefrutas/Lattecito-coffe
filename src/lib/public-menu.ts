@@ -1,6 +1,14 @@
 import type { Store } from './model.ts';
 import type { PublicCatalog } from './catalog-schema.ts';
 
+export function publishCatalog(catalog: PublicCatalog): PublicCatalog {
+  return {
+    products: catalog.products.filter((product) => product.active),
+    modifiers: catalog.modifiers.filter((modifier) => modifier.active !== false),
+    settings: catalog.settings,
+  };
+}
+
 // Explicit allowlist: never publish stock, costs, recipes, sales or authentication.
 export function publicMenu(s: Store): PublicCatalog {
   return {

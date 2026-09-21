@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { catalogSchema } from '@/lib/catalog-schema';
 import { CatalogConflictError, readCloudCatalog, saveCloudCatalog } from '@/lib/cloud-catalog';
@@ -72,10 +73,11 @@ export async function POST(request: NextRequest) {
         'El menú cambió en otra pestaña. Actualiza los datos y vuelve a intentar.',
       );
     const saved = await saveCloudCatalog(input.catalog, current.etag);
+    const persisted = await readCloudCatalog();
+    if (persisted.etag !== saved.etag || !isDeepStrictEqual(persisted.catalog, input.catalog))
+      throw new Error('No fue posible verificar el cambio guardado. Actualiza el catálogo.');
     return NextResponse.json({
-      catalog: input.catalog,
-      etag: saved.etag,
-      source: 'supabase',
+      ...persisted,
     });
   } catch (error) {
     if (error instanceof CatalogConflictError)

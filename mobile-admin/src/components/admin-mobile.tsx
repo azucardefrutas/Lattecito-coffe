@@ -27,8 +27,9 @@ import {
   type Product,
   type Sale,
 } from '@/lib/api';
+import { InventoryMobile } from '@/components/inventory-mobile';
 
-type Tab = 'resumen' | 'caja' | 'ventas' | 'costos';
+type Tab = 'resumen' | 'caja' | 'ventas' | 'inventario' | 'costos';
 type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
 
 const sizes = ['Chico', 'Mediano', 'Grande'];
@@ -388,6 +389,18 @@ export function AdminMobile() {
       );
     }
 
+    if (tab === 'inventario') {
+      return (
+        <InventoryMobile
+          dashboard={dashboard}
+          refresh={() => refresh(token)}
+          setBusy={setBusy}
+          setError={setError}
+          token={token}
+        />
+      );
+    }
+
     if (tab === 'costos') {
       return (
         <View style={styles.section}>
@@ -528,6 +541,7 @@ export function AdminMobile() {
     { id: 'resumen', label: 'Resumen' },
     { id: 'caja', label: 'Caja' },
     { id: 'ventas', label: 'Ventas' },
+    { id: 'inventario', label: 'Inventario' },
     ...(dashboard.user.role === 'developer' ? [{ id: 'costos' as Tab, label: 'Costos' }] : []),
   ];
 

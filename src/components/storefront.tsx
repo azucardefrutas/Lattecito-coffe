@@ -52,24 +52,33 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
     cartDialog = useRef<HTMLDialogElement>(null),
     menuRequest = useRef(0);
   const menuFailed = Boolean(menuError);
-  const loadMenu = useCallback(async () => {
+  const loadMenu = useCallback(async (silent = false) => {
     const request = ++menuRequest.current;
-    setReviewing(true);
-    setMenuError('');
+    if (!silent) {
+      setReviewing(true);
+      setMenuError('');
+    }
     try {
       const r = await fetch('/api/menu', { cache: 'no-store' });
       if (!r.ok)
         throw new Error('No pudimos revisar el menú. Reintenta antes de enviar el pedido.');
       const d = await r.json();
       if (request !== menuRequest.current) return;
-      setProducts(d.products.map((p: Product) => ({ ...p, cost: [0, 0, 0] })));
+      const nextProducts = d.products.map((p: Product) => ({ ...p, cost: [0, 0, 0] }));
+      setProducts(nextProducts);
+      setSelected((current) => {
+        if (!current) return null;
+        const updated = nextProducts.find((p: Product) => p.id === current.id);
+        return updated && JSON.stringify(updated) === JSON.stringify(current) ? current : updated ?? null;
+      });
       setModifiers(d.modifiers ?? []);
       setSettings(d.settings);
+      setMenuError('');
     } catch (e) {
       if (request === menuRequest.current)
         setMenuError(e instanceof Error ? e.message : 'No se pudo revisar el menú.');
     } finally {
-      if (request === menuRequest.current) setReviewing(false);
+      if (!silent && request === menuRequest.current) setReviewing(false);
     }
   }, []);
   useEffect(() => {
@@ -85,6 +94,20 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
       setError('No pudimos recuperar el pedido guardado. Puedes armar uno nuevo.');
     }
     setReady(true);
+  }, [loadMenu]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadMenu(true);
+    };
+    const interval = window.setInterval(refresh, 5_000);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [loadMenu]);
   useEffect(() => {
     if (ready)
