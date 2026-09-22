@@ -342,7 +342,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                       <h3>{p.name}</h3>
                     </div>
                     <span>
-                      Desde
+                      {p.kind === 'snack' ? 'Precio' : 'Desde'}
                       <br />
                       <strong>{money(p.prices[0])}</strong>
                     </span>
@@ -526,7 +526,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
       </footer>
       <dialog
         ref={dialog}
-        aria-label="Personalizar bebida"
+        aria-label="Personalizar producto"
         onCancel={() => setSelected(null)}
         onClick={(e) => {
           if (e.target === dialog.current) setSelected(null);
@@ -555,26 +555,33 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
               <span className="eyebrow">{selected.category}</span>
               <h2>{selected.name}</h2>
               <p>{selected.description}</p>
-              <fieldset>
-                <legend>Elige tu tamaño</legend>
-                <div className="size-options">
-                  {sizes.map((s, i) => (
-                    <button
-                      key={s}
-                      aria-pressed={size === i}
-                      className={size === i ? 'selected' : ''}
-                      onClick={() => setSize(i)}
-                    >
-                      {s}
-                      <strong>{money(selected.prices[i])}</strong>
-                    </button>
-                  ))}
+              {selected.kind === 'snack' ? (
+                <div className="snack-price">
+                  <span>Precio por pieza</span>
+                  <strong>{money(selected.prices[0])}</strong>
                 </div>
-              </fieldset>
-              {availableModifiers(selected.id, modifiers).length > 0 && (
+              ) : (
+                <fieldset>
+                  <legend>Elige tu tamaño</legend>
+                  <div className="size-options">
+                    {sizes.map((s, i) => (
+                      <button
+                        key={s}
+                        aria-pressed={size === i}
+                        className={size === i ? 'selected' : ''}
+                        onClick={() => setSize(i)}
+                      >
+                        {s}
+                        <strong>{money(selected.prices[i])}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+              {availableModifiers(selected.id, modifiers, selected.kind).length > 0 && (
                 <fieldset>
                   <legend>Hazlo a tu gusto</legend>
-                  {availableModifiers(selected.id, modifiers).map((m) => (
+                  {availableModifiers(selected.id, modifiers, selected.kind).map((m) => (
                     <label className="check-field" key={m.id}>
                       <input
                         type="checkbox"

@@ -2,7 +2,13 @@ import { fetch } from 'expo/fetch';
 
 export type Role = 'admin' | 'developer';
 export type AdminUser = { username: string; role: Role };
-export type Modifier = { id: string; name: string; price: number; active: boolean };
+export type Modifier = {
+  id: string;
+  name: string;
+  price: number;
+  active: boolean;
+  productIds?: string[] | null;
+};
 export type Product = {
   id: string;
   name: string;

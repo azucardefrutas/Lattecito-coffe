@@ -43,6 +43,7 @@ test('the published catalog excludes internal business data and hidden products/
     'category',
     'description',
     'id',
+    'kind',
     'name',
     'prices',
     'tone',
@@ -82,7 +83,13 @@ test('cloud publication keeps edited drinks and hides disabled drinks and extras
     ],
   } as PublicCatalog;
   const published = publishCatalog(catalog);
-  assert.deepEqual(published.products.map((product) => product.name), ['Nuevo latte']);
+  assert.deepEqual(
+    published.products.map((product) => product.name),
+    ['Nuevo latte'],
+  );
   assert.deepEqual(published.products[0].prices, [4900, 5900, 6900]);
-  assert.deepEqual(published.modifiers.map((modifier) => modifier.id), ['shot']);
+  assert.deepEqual(
+    published.modifiers.map((modifier) => modifier.id),
+    ['shot'],
+  );
 });

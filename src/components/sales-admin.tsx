@@ -263,7 +263,7 @@ export default function SalesAdmin() {
         </p>
         <div className="daily-breakdown-grid">
           <div>
-            <h3>Bebidas cobradas</h3>
+            <h3>Productos cobrados</h3>
             <div className="daily-lines">
               {data.daily.products.map((product) => (
                 <div key={product.key}>
@@ -274,7 +274,7 @@ export default function SalesAdmin() {
                 </div>
               ))}
               {!data.daily.products.length && (
-                <p className="muted">Todavía no hay bebidas cobradas.</p>
+                <p className="muted">Todavía no hay productos cobrados.</p>
               )}
             </div>
           </div>
@@ -313,7 +313,7 @@ export default function SalesAdmin() {
           {products.map((product) => (
             <article key={product.id}>
               <strong>{product.name}</strong>
-              {sizes.map((size, index) => (
+              {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
                 <button key={size} type="button" onClick={() => add(product.id, index)}>
                   <span>{size}</span>
                   <b>{money(product.prices[index])}</b>
@@ -327,7 +327,9 @@ export default function SalesAdmin() {
           {lines.map((line) => {
             const product = products.find((candidate) => candidate.id === line.productId)!;
             const available = modifiers.filter(
-              (modifier) => !modifier.productIds || modifier.productIds.includes(product.id),
+              (modifier) =>
+                modifier.productIds?.includes(product.id) ||
+                (!modifier.productIds && product.kind !== 'snack'),
             );
             return (
               <article key={key(line.productId, line.size)}>
@@ -335,7 +337,8 @@ export default function SalesAdmin() {
                   <div>
                     <strong>{product.name}</strong>
                     <p>
-                      {sizes[line.size]} · {money(product.prices[line.size])}
+                      {product.kind === 'snack' ? 'Pieza' : sizes[line.size]} ·{' '}
+                      {money(product.prices[line.size])}
                     </p>
                   </div>
                   <div className="sales-quantity">

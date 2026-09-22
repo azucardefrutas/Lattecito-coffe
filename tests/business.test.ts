@@ -147,3 +147,17 @@ test('WhatsApp has quantities and confirmation wording without prices', () => {
   assert.match(text, /Sin azúcar/);
   assert.match(text, /confirman disponibilidad/);
 });
+
+test('snacks sell by piece with one price and reject drink sizes', () => {
+  const snack = {
+    ...initialProducts[0],
+    id: 'brownie',
+    name: 'Brownie',
+    kind: 'snack' as const,
+    prices: [5000, 5000, 5000],
+  };
+  const result = calculate([snack], [{ productId: snack.id, size: 0, quantity: 2 }]);
+  assert.equal(result.items[0].size, 'Pieza');
+  assert.equal(result.total, 10000);
+  assert.throws(() => calculate([snack], [{ productId: snack.id, size: 1, quantity: 1 }]));
+});

@@ -240,9 +240,9 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
       </section>
 
       <section className="panel">
-        <div className="section-heading"><div><span className="eyebrow">DESCUENTO AUTOMÁTICO</span><h2>Recetas por bebida y extra</h2></div><UtensilsCrossed size={25} /></div>
-        <p>Define cuánto consume cada tamaño. Al registrar una venta, esos insumos se descuentan en una sola operación segura.</p>
-        <label className="inventory-target">Producto o extra<select value={recipeTarget} onChange={(event) => setRecipeTarget(event.target.value)}>{catalog.products.map((product) => sizes.map((size, index) => <option key={`${product.id}-${index}`} value={`product|${product.id}|${index}`}>{product.name} · {size}</option>))}{catalog.modifiers.map((modifier) => <option key={modifier.id} value={`modifier|${modifier.id}|-1`}>Extra · {modifier.name}</option>)}</select></label>
+        <div className="section-heading"><div><span className="eyebrow">DESCUENTO AUTOMÁTICO</span><h2>Recetas por producto y extra</h2></div><UtensilsCrossed size={25} /></div>
+        <p>Define cuánto consume cada tamaño o pieza. Al registrar una venta, esos insumos se descuentan en una sola operación segura.</p>
+        <label className="inventory-target">Producto o extra<select value={recipeTarget} onChange={(event) => setRecipeTarget(event.target.value)}>{catalog.products.map((product) => (product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => <option key={`${product.id}-${index}`} value={`product|${product.id}|${index}`}>{product.name} · {size}</option>))}{catalog.modifiers.map((modifier) => <option key={modifier.id} value={`modifier|${modifier.id}|-1`}>Extra · {modifier.name}</option>)}</select></label>
         <div className="recipe-list">
           {recipeDraft.map((ingredient) => {
             const item = data.items.find((candidate) => candidate.id === ingredient.itemId);

@@ -168,17 +168,27 @@ export const initialProducts: Product[] = [
     tone: 'dark',
   },
 ];
-export function availableModifiers(productId: string, modifiers: MenuModifier[]) {
+export function availableModifiers(
+  productId: string,
+  modifiers: MenuModifier[],
+  kind: Product['kind'] = 'drink',
+) {
   return modifiers.filter(
-    (m) => m.active !== false && (!m.productIds || m.productIds.includes(productId)),
+    (m) =>
+      m.active !== false &&
+      (m.productIds?.includes(productId) || (!m.productIds && kind !== 'snack')),
   );
 }
-export function resolveModifiers(line: Line, modifiers: MenuModifier[]) {
+export function resolveModifiers(
+  line: Line,
+  modifiers: MenuModifier[],
+  kind: Product['kind'] = 'drink',
+) {
   const ids = line.modifierIds ?? [];
   if (ids.length > 20 || new Set(ids).size !== ids.length)
     throw new Error('Revisa los extras: no pueden repetirse.');
   return ids.map((id) => {
-    const modifier = availableModifiers(line.productId, modifiers).find((m) => m.id === id);
+    const modifier = availableModifiers(line.productId, modifiers, kind).find((m) => m.id === id);
     if (!modifier) throw new Error('Un extra ya no está disponible para esta bebida.');
     return modifier;
   });
@@ -211,7 +221,7 @@ export function calculate(
       throw new Error('Producto o cantidad inválidos.');
     if (p.kind === 'snack' && line.size !== 0)
       throw new Error('Los snacks se registran por pieza.');
-    const extras = resolveModifiers(line, modifiers);
+    const extras = resolveModifiers(line, modifiers, p.kind);
     return {
       productId: p.id,
       productName: p.name,

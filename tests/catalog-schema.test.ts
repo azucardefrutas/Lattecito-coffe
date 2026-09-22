@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import snapshot from '../src/data/public-menu.json' with { type: 'json' };
-import { catalogSchema } from '../src/lib/catalog-schema.ts';
+import { catalogSchema, removeCatalogProduct } from '../src/lib/catalog-schema.ts';
 
 test('the published snapshot is a valid editable catalog', () => {
   assert.doesNotThrow(() => catalogSchema.parse(snapshot));
@@ -41,4 +41,35 @@ test('catalog rejects non-HTTPS image addresses', () => {
     imageUrl: 'http://example.com/latte.jpg',
   };
   assert.throws(() => catalogSchema.parse(catalog), /HTTPS/);
+});
+
+test('catalog supports snacks and cleanly removes product references', () => {
+  const catalog = structuredClone(catalogSchema.parse(snapshot));
+  const snack = {
+    ...catalog.products[0],
+    id: 'brownie-cacao',
+    name: 'Brownie de cacao',
+    kind: 'snack' as const,
+    category: 'Snacks y repostería',
+    prices: [5000, 5000, 5000],
+  };
+  catalog.products.push(snack);
+  catalog.modifiers = [
+    {
+      id: 'helado',
+      name: 'Bola de helado',
+      price: 1500,
+      active: true,
+      productIds: [snack.id],
+    },
+  ];
+  const saved = catalogSchema.parse(catalog);
+  assert.equal(saved.products.at(-1)?.kind, 'snack');
+  const removed = removeCatalogProduct(saved, snack.id);
+  assert.equal(
+    removed.products.some((product) => product.id === snack.id),
+    false,
+  );
+  assert.deepEqual(removed.modifiers[0].productIds, []);
+  assert.doesNotThrow(() => catalogSchema.parse(removed));
 });

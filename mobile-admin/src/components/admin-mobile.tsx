@@ -420,7 +420,7 @@ export function AdminMobile() {
             <SaleCard key={sale.id} sale={sale} onConfirm={confirmTransfer} onOpen={setTicket} />
           ))}
           {!dashboard.sales.length && <Text style={styles.empty}>Todavía no hay ventas hoy.</Text>}
-          <Text style={styles.sectionTitle}>Suma por bebida</Text>
+          <Text style={styles.sectionTitle}>Suma por producto</Text>
           <View style={styles.card}>
             {dashboard.daily.products.map((product) => (
               <View key={product.key} style={styles.dailyRow}>
@@ -431,7 +431,7 @@ export function AdminMobile() {
               </View>
             ))}
             {!dashboard.daily.products.length && (
-              <Text style={styles.empty}>Todavía no hay bebidas cobradas.</Text>
+              <Text style={styles.empty}>Todavía no hay productos cobrados.</Text>
             )}
             {dashboard.daily.extras.length > 0 && <Text style={styles.dailyHeading}>EXTRAS</Text>}
             {dashboard.daily.extras.map((extra) => (
@@ -494,13 +494,13 @@ export function AdminMobile() {
     if (tab === 'costos') {
       return (
         <View style={styles.section}>
-          <Text style={styles.pageTitle}>Costos por tamaño</Text>
+          <Text style={styles.pageTitle}>Costos de productos</Text>
           <Text style={styles.pageCopy}>Se usan para calcular la ganancia bruta del día.</Text>
           {products.map((product) => (
             <View key={product.id} style={styles.card}>
               <Text style={styles.cardTitle}>{product.name}</Text>
               <View style={styles.costRow}>
-                {sizes.map((size, index) => (
+                {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
                   <View key={size} style={styles.costField}>
                     <Text style={styles.smallLabel}>{size}</Text>
                     <TextInput
@@ -544,7 +544,7 @@ export function AdminMobile() {
               <Text numberOfLines={2} style={styles.muted}>
                 {product.description}
               </Text>
-              {sizes.map((size, index) => (
+              {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
                 <View key={size} style={styles.sizeRow}>
                   <Text style={styles.sizeText}>
                     {size} · {money(product.prices[index] ?? 0)}
@@ -568,7 +568,8 @@ export function AdminMobile() {
                 <View style={styles.flex}>
                   <Text style={styles.cardTitle}>{product.name}</Text>
                   <Text style={styles.muted}>
-                    {sizes[line.size]} · {money(product.prices[line.size])}
+                    {product.kind === 'snack' ? 'Pieza' : sizes[line.size]} ·{' '}
+                    {money(product.prices[line.size])}
                   </Text>
                 </View>
                 <View style={styles.quantity}>
@@ -581,22 +582,32 @@ export function AdminMobile() {
                   </Pressable>
                 </View>
               </View>
-              {modifiers.length > 0 && (
+              {modifiers.filter(
+                (modifier) =>
+                  modifier.productIds?.includes(product.id) ||
+                  (!modifier.productIds && product.kind !== 'snack'),
+              ).length > 0 && (
                 <View style={styles.chips}>
-                  {modifiers.map((modifier) => {
-                    const selected = line.modifierIds.includes(modifier.id);
-                    return (
-                      <Pressable
-                        key={modifier.id}
-                        onPress={() => toggleModifier(line, modifier.id)}
-                        style={[styles.chip, selected && styles.chipSelected]}
-                      >
-                        <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                          {modifier.name} +{money(modifier.price)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  {modifiers
+                    .filter(
+                      (modifier) =>
+                        modifier.productIds?.includes(product.id) ||
+                        (!modifier.productIds && product.kind !== 'snack'),
+                    )
+                    .map((modifier) => {
+                      const selected = line.modifierIds.includes(modifier.id);
+                      return (
+                        <Pressable
+                          key={modifier.id}
+                          onPress={() => toggleModifier(line, modifier.id)}
+                          style={[styles.chip, selected && styles.chipSelected]}
+                        >
+                          <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                            {modifier.name} +{money(modifier.price)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                 </View>
               )}
             </View>
