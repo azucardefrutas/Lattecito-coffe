@@ -6,6 +6,7 @@ export type Modifier = { id: string; name: string; price: number; active: boolea
 export type Product = {
   id: string;
   name: string;
+  kind?: 'drink' | 'snack';
   category: string;
   description: string;
   prices: number[];
@@ -13,9 +14,14 @@ export type Product = {
   imageUrl?: string;
 };
 export type SaleItem = {
+  productId?: string;
+  productName?: string;
+  sizeIndex?: number;
   name: string;
   size: string;
   quantity: number;
+  baseUnitPrice?: number;
+  extras?: { id: string; name: string; unitPrice: number }[];
   unitPrice: number;
   cost: number;
 };
@@ -79,6 +85,31 @@ export type Dashboard = {
       configuredRecipes: number;
     };
   };
+  daily: {
+    products: {
+      key: string;
+      productId: string;
+      name: string;
+      size: string;
+      quantity: number;
+      amount: number;
+    }[];
+    extras: { key: string; id: string; name: string; quantity: number; amount: number }[];
+    total: number;
+    cash: number;
+    transfers: number;
+    pendingTransfers: number;
+    tickets: number;
+  };
+  history: {
+    date: string;
+    tickets: number;
+    total: number;
+    cash: number;
+    transfers: number;
+    pendingTransfers: number;
+    cost: number;
+  }[];
   summary: {
     total: number;
     cash: number;
@@ -102,7 +133,9 @@ async function request<T>(path: string, init: RequestInit & { token?: string } =
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   const body = (await response.json().catch(() => null)) as { error?: string } | T | null;
   if (!response.ok) {
-    const error = new Error((body as { error?: string } | null)?.error ?? 'No fue posible conectar.');
+    const error = new Error(
+      (body as { error?: string } | null)?.error ?? 'No fue posible conectar.',
+    );
     Object.assign(error, { status: response.status });
     throw error;
   }

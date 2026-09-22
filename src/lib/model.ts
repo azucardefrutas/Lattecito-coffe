@@ -19,6 +19,7 @@ export type MenuModifier = Omit<Modifier, 'recipe'>;
 export type Product = {
   id: string;
   name: string;
+  kind?: 'drink' | 'snack';
   category: string;
   description: string;
   prices: number[];
@@ -34,7 +35,18 @@ export type Sale = {
   id: string;
   date: string;
   sessionId: string;
-  items: { name: string; size: string; quantity: number; unitPrice: number; cost: number }[];
+  items: {
+    productId?: string;
+    productName?: string;
+    sizeIndex?: number;
+    name: string;
+    size: string;
+    quantity: number;
+    baseUnitPrice?: number;
+    extras?: { id: string; name: string; unitPrice: number }[];
+    unitPrice: number;
+    cost: number;
+  }[];
   subtotal: number;
   discount: number;
   total: number;
@@ -197,11 +209,22 @@ export function calculate(
       line.quantity > 99
     )
       throw new Error('Producto o cantidad inválidos.');
+    if (p.kind === 'snack' && line.size !== 0)
+      throw new Error('Los snacks se registran por pieza.');
     const extras = resolveModifiers(line, modifiers);
     return {
-      name: p.name + (extras.length ? ` + ${extras.map((m) => m.name).join(', ')}` : ''),
-      size: sizes[line.size],
+      productId: p.id,
+      productName: p.name,
+      sizeIndex: line.size,
+      name: p.name,
+      size: p.kind === 'snack' ? 'Pieza' : sizes[line.size],
       quantity: line.quantity,
+      baseUnitPrice: p.prices[line.size],
+      extras: extras.map((extra) => ({
+        id: extra.id,
+        name: extra.name,
+        unitPrice: extra.price,
+      })),
       unitPrice: p.prices[line.size] + extras.reduce((sum, m) => sum + m.price, 0),
       cost: p.cost[line.size],
     };
@@ -229,7 +252,7 @@ export function whatsappText(
   modifiers: MenuModifier[] = [],
 ) {
   const t = calculate(products, lines, 0, modifiers);
-  return `Hola, Lattecito Coffee. Me gustaría pedir:\n\n${t.items.map((i) => `${i.quantity} × ${i.name} · ${i.size}`).join('\n\n')}\n\n${note.trim() ? `Notas: ${note.trim()}\n` : ''}¿Me confirman disponibilidad y tiempo de preparación?`;
+  return `Hola, Lattecito Coffee. Me gustaría pedir:\n\n${t.items.map((i) => `${i.quantity} × ${i.name}${i.extras?.length ? ` + ${i.extras.map((extra) => extra.name).join(', ')}` : ''} · ${i.size}`).join('\n\n')}\n\n${note.trim() ? `Notas: ${note.trim()}\n` : ''}¿Me confirman disponibilidad y tiempo de preparación?`;
 }
 export function quoteSale(store: Store, lines: Line[], percent: number) {
   const base = calculate(store.products, lines, percent, store.modifiers);

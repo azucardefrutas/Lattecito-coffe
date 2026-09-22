@@ -1,0 +1,551 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Minus, Plus, Printer, ReceiptText, Share2, ShoppingCart } from 'lucide-react';
+import type { PublicCatalog } from '@/lib/catalog-schema';
+import { money, sizes } from '@/lib/model';
+import {
+  displaySaleItem,
+  receiptText,
+  type DailySalesBreakdown,
+  type SaleForSummary,
+} from '@/lib/sales-summary';
+
+type Sale = SaleForSummary & {
+  createdBy: string;
+  confirmedBy: string;
+  cost: number;
+};
+type HistoryDay = {
+  date: string;
+  tickets: number;
+  total: number;
+  cash: number;
+  transfers: number;
+  pendingTransfers: number;
+  cost: number;
+};
+type Dashboard = {
+  catalog: PublicCatalog;
+  sales: Sale[];
+  daily: DailySalesBreakdown;
+  history: HistoryDay[];
+  summary: {
+    total: number;
+    cash: number;
+    transfers: number;
+    pendingTransfers: number;
+    grossProfit: number;
+    missingCostCount: number;
+    tickets: number;
+  };
+};
+type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
+
+export default function SalesAdmin() {
+  const [data, setData] = useState<Dashboard | null>(null);
+  const [cart, setCart] = useState<Record<string, CartLine>>({});
+  const [payment, setPayment] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
+  const [received, setReceived] = useState('');
+  const [customer, setCustomer] = useState('');
+  const [note, setNote] = useState('');
+  const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setBusy(true);
+    try {
+      const response = await fetch('/api/catalog-admin/sales', { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? 'No fue posible cargar las ventas.');
+      setData(result);
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible cargar las ventas.');
+    } finally {
+      if (!silent) setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const interval = window.setInterval(() => void load(true), 5_000);
+    return () => window.clearInterval(interval);
+  }, [load]);
+
+  const products = data?.catalog.products.filter((product) => product.active) ?? [];
+  const modifiers = data?.catalog.modifiers.filter((modifier) => modifier.active !== false) ?? [];
+  const lines = Object.values(cart);
+  const total = useMemo(
+    () =>
+      lines.reduce((sum, line) => {
+        const product = products.find((candidate) => candidate.id === line.productId);
+        const extras = line.modifierIds.reduce(
+          (extraSum, id) => extraSum + (modifiers.find((extra) => extra.id === id)?.price ?? 0),
+          0,
+        );
+        return sum + ((product?.prices[line.size] ?? 0) + extras) * line.quantity;
+      }, 0),
+    [lines, modifiers, products],
+  );
+
+  function key(productId: string, size: number) {
+    return `${productId}:${size}`;
+  }
+
+  function add(productId: string, size: number) {
+    const id = key(productId, size);
+    setCart((current) => ({
+      ...current,
+      [id]: current[id]
+        ? { ...current[id], quantity: current[id].quantity + 1 }
+        : { productId, size, quantity: 1, modifierIds: [] },
+    }));
+  }
+
+  function quantity(line: CartLine, delta: number) {
+    const id = key(line.productId, line.size);
+    setCart((current) => {
+      const next = line.quantity + delta;
+      if (next > 0) return { ...current, [id]: { ...line, quantity: next } };
+      const copy = { ...current };
+      delete copy[id];
+      return copy;
+    });
+  }
+
+  function toggleExtra(line: CartLine, modifierId: string) {
+    const id = key(line.productId, line.size);
+    setCart((current) => ({
+      ...current,
+      [id]: {
+        ...line,
+        modifierIds: line.modifierIds.includes(modifierId)
+          ? line.modifierIds.filter((item) => item !== modifierId)
+          : [...line.modifierIds, modifierId],
+      },
+    }));
+  }
+
+  async function send(body: object) {
+    const response = await fetch('/api/catalog-admin/sales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? 'No fue posible guardar la venta.');
+    return result as Sale;
+  }
+
+  async function completeSale() {
+    if (!lines.length) return;
+    const receivedCents = Math.round(Number(received || 0) * 100);
+    if (payment === 'Efectivo' && receivedCents < total) {
+      setError('El efectivo recibido es menor que el total.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const sale = await send({
+        action: 'sale',
+        id: crypto.randomUUID(),
+        customer: customer.trim(),
+        note: note.trim(),
+        lines,
+        payment,
+        received: payment === 'Efectivo' ? receivedCents : 0,
+      });
+      setCart({});
+      setReceived('');
+      setCustomer('');
+      setNote('');
+      setReceipt(sale);
+      setNotice(`Venta #${sale.number} registrada.`);
+      await load(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible registrar la venta.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmTransfer(saleId: string) {
+    setBusy(true);
+    try {
+      await send({ action: 'confirm-transfer', saleId });
+      setNotice('Transferencia confirmada e incluida en el total del día.');
+      await load(true);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'No fue posible confirmar la transferencia.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shareSale(sale: Sale) {
+    const text = receiptText(sale, money);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `Comprobante #${sale.number}`, text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setNotice('Comprobante copiado. Ya puedes enviarlo al cliente.');
+      }
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setError('No fue posible compartir el comprobante. Puedes imprimirlo o guardarlo como PDF.');
+    }
+  }
+
+  if (!data)
+    return (
+      <section className="panel">
+        <p>{error || 'Cargando ventas del día…'}</p>
+      </section>
+    );
+
+  return (
+    <div className="sales-admin-stack">
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="notice success" role="status">
+          {notice}
+        </p>
+      )}
+
+      <section className="summary-grid sales-summary-grid">
+        <article className="metric-card">
+          <span>VENTA COBRADA</span>
+          <strong>{money(data.summary.total)}</strong>
+          <small>{data.summary.tickets} tickets registrados</small>
+        </article>
+        <article className="metric-card">
+          <span>EFECTIVO</span>
+          <strong>{money(data.summary.cash)}</strong>
+          <small>cobrado hoy</small>
+        </article>
+        <article className="metric-card">
+          <span>TRANSFERENCIAS</span>
+          <strong>{money(data.summary.transfers)}</strong>
+          <small>{money(data.summary.pendingTransfers)} por confirmar</small>
+        </article>
+        <article className="metric-card">
+          <span>GANANCIA BRUTA</span>
+          <strong>
+            {data.summary.missingCostCount ? 'Faltan costos' : money(data.summary.grossProfit)}
+          </strong>
+          <small>venta menos costo registrado</small>
+        </article>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">REGISTRO DEL DÍA</span>
+            <h2>Sumas por bebida y extra</h2>
+          </div>
+          <ReceiptText size={26} />
+        </div>
+        <p>
+          Cada presentación se suma por separado. Las transferencias pendientes aparecen aparte
+          hasta que confirmes el depósito.
+        </p>
+        <div className="daily-breakdown-grid">
+          <div>
+            <h3>Bebidas cobradas</h3>
+            <div className="daily-lines">
+              {data.daily.products.map((product) => (
+                <div key={product.key}>
+                  <span>
+                    {product.quantity} × {product.name} · {product.size}
+                  </span>
+                  <strong>{money(product.amount)}</strong>
+                </div>
+              ))}
+              {!data.daily.products.length && (
+                <p className="muted">Todavía no hay bebidas cobradas.</p>
+              )}
+            </div>
+          </div>
+          <div>
+            <h3>Extras cobrados</h3>
+            <div className="daily-lines">
+              {data.daily.extras.map((extra) => (
+                <div key={extra.key}>
+                  <span>
+                    {extra.quantity} × {extra.name}
+                  </span>
+                  <strong>{money(extra.amount)}</strong>
+                </div>
+              ))}
+              {!data.daily.extras.length && (
+                <p className="muted">Todavía no hay extras cobrados.</p>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="daily-total">
+          <span>SUMA COBRADA DEL DÍA</span>
+          <strong>{money(data.daily.total)}</strong>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">CAJA</span>
+            <h2>Registrar nueva venta</h2>
+          </div>
+          <ShoppingCart size={26} />
+        </div>
+        <div className="sales-product-grid">
+          {products.map((product) => (
+            <article key={product.id}>
+              <strong>{product.name}</strong>
+              {sizes.map((size, index) => (
+                <button key={size} type="button" onClick={() => add(product.id, index)}>
+                  <span>{size}</span>
+                  <b>{money(product.prices[index])}</b>
+                  <Plus size={15} />
+                </button>
+              ))}
+            </article>
+          ))}
+        </div>
+        <div className="sales-cart">
+          {lines.map((line) => {
+            const product = products.find((candidate) => candidate.id === line.productId)!;
+            const available = modifiers.filter(
+              (modifier) => !modifier.productIds || modifier.productIds.includes(product.id),
+            );
+            return (
+              <article key={key(line.productId, line.size)}>
+                <div className="section-heading compact">
+                  <div>
+                    <strong>{product.name}</strong>
+                    <p>
+                      {sizes[line.size]} · {money(product.prices[line.size])}
+                    </p>
+                  </div>
+                  <div className="sales-quantity">
+                    <button onClick={() => quantity(line, -1)}>
+                      <Minus size={14} />
+                    </button>
+                    <b>{line.quantity}</b>
+                    <button onClick={() => quantity(line, 1)}>
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+                {available.length > 0 && (
+                  <div className="sales-extra-chips">
+                    {available.map((extra) => (
+                      <button
+                        className={line.modifierIds.includes(extra.id) ? 'selected' : ''}
+                        key={extra.id}
+                        onClick={() => toggleExtra(line, extra.id)}
+                      >
+                        {extra.name} +{money(extra.price)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+          {!lines.length && <p className="muted">Pulsa un tamaño para agregarlo a la cuenta.</p>}
+        </div>
+        {lines.length > 0 && (
+          <div className="sales-checkout">
+            <div className="daily-total">
+              <span>TOTAL</span>
+              <strong>{money(total)}</strong>
+            </div>
+            <div className="inline-fields">
+              <button
+                className={payment === 'Efectivo' ? 'small-button active-choice' : 'small-button'}
+                onClick={() => setPayment('Efectivo')}
+              >
+                Efectivo
+              </button>
+              <button
+                className={
+                  payment === 'Transferencia' ? 'small-button active-choice' : 'small-button'
+                }
+                onClick={() => setPayment('Transferencia')}
+              >
+                Transferencia
+              </button>
+            </div>
+            <div className="form-grid">
+              {payment === 'Efectivo' && (
+                <label className="field">
+                  Efectivo recibido
+                  <input
+                    type="number"
+                    min={total / 100}
+                    step="0.01"
+                    value={received}
+                    onChange={(event) => setReceived(event.target.value)}
+                  />
+                </label>
+              )}
+              <label className="field">
+                Cliente (opcional)
+                <input
+                  maxLength={100}
+                  value={customer}
+                  onChange={(event) => setCustomer(event.target.value)}
+                />
+              </label>
+            </div>
+            <label className="field">
+              Nota (opcional)
+              <textarea
+                maxLength={500}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </label>
+            {payment === 'Transferencia' && (
+              <p className="notice">
+                La transferencia quedará en espera y no se sumará como cobrada hasta confirmarla.
+              </p>
+            )}
+            <button className="button" disabled={busy} onClick={() => void completeSale()}>
+              {busy ? 'Guardando…' : 'Cobrar y generar comprobante'}
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <span className="eyebrow">MOVIMIENTOS DE HOY</span>
+        <h2>Tickets individuales</h2>
+        <div className="sales-ticket-list">
+          {data.sales.map((sale) => (
+            <article key={sale.id}>
+              <div className="section-heading compact">
+                <div>
+                  <strong>Ticket #{sale.number}</strong>
+                  <p>
+                    {new Date(sale.date).toLocaleTimeString('es-MX', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    · {sale.createdBy}
+                  </p>
+                </div>
+                <b>{money(sale.total)}</b>
+              </div>
+              {sale.items.map((item, index) => (
+                <p key={index}>
+                  {item.quantity} × {displaySaleItem(item)}
+                </p>
+              ))}
+              <div className="inline-fields">
+                <button className="small-button" onClick={() => setReceipt(sale)}>
+                  Ver comprobante
+                </button>
+                {sale.paymentStatus === 'Pendiente' && (
+                  <button
+                    className="small-button"
+                    disabled={busy}
+                    onClick={() => void confirmTransfer(sale.id)}
+                  >
+                    Confirmar transferencia
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+          {!data.sales.length && <p className="muted">Todavía no hay tickets hoy.</p>}
+        </div>
+        <p className="retention-note">
+          Los tickets detallados se eliminan automáticamente después de siete días. Los totales
+          diarios compactos permanecen para conservar el historial del negocio.
+        </p>
+      </section>
+
+      <section className="panel">
+        <span className="eyebrow">ÚLTIMOS 7 DÍAS</span>
+        <h2>Historial compacto</h2>
+        <div className="daily-lines">
+          {data.history.map((day) => (
+            <div key={day.date}>
+              <span>
+                {new Date(`${day.date}T12:00:00`).toLocaleDateString('es-MX')} · {day.tickets}{' '}
+                tickets
+              </span>
+              <strong>{money(day.total)}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {receipt && (
+        <div className="catalog-overlay receipt-overlay">
+          <article className="receipt digital-receipt">
+            <span className="eyebrow">LATTECITO COFFEE</span>
+            <h2>Comprobante #{receipt.number}</h2>
+            <p>{new Date(receipt.date).toLocaleString('es-MX')}</p>
+            {receipt.customer && <p>Cliente: {receipt.customer}</p>}
+            <hr />
+            {receipt.items.map((item, index) => (
+              <div className="receipt-item" key={index}>
+                <div>
+                  <span>
+                    {item.quantity} × {item.name} · {item.size}
+                  </span>
+                  {item.extras?.map((extra) => (
+                    <small key={extra.id}>
+                      + {extra.name} · {money(extra.unitPrice * item.quantity)}
+                    </small>
+                  ))}
+                </div>
+                <strong>{money(item.unitPrice * item.quantity)}</strong>
+              </div>
+            ))}
+            <hr />
+            <div className="daily-total">
+              <span>TOTAL</span>
+              <strong>{money(receipt.total)}</strong>
+            </div>
+            <p>
+              {receipt.payment} · {receipt.paymentStatus}
+            </p>
+            {receipt.payment === 'Efectivo' && (
+              <p>
+                Recibido: {money(receipt.received)} · Cambio: {money(receipt.change)}
+              </p>
+            )}
+            {receipt.note && <p>Nota: {receipt.note}</p>}
+            <p>Gracias por tu compra.</p>
+            <div className="inline-fields receipt-actions">
+              <button className="button" onClick={() => window.print()}>
+                <Printer size={16} /> Imprimir / PDF
+              </button>
+              <button className="small-button" onClick={() => void shareSale(receipt)}>
+                <Share2 size={16} /> Compartir
+              </button>
+              <button className="small-button" onClick={() => setReceipt(null)}>
+                Cerrar
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
+    </div>
+  );
+}

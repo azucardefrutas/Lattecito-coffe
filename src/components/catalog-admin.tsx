@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
+  BadgeDollarSign,
   Coffee,
   ImagePlus,
   LayoutDashboard,
@@ -12,22 +13,30 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { money, sizes } from '@/lib/model';
-import type { CatalogModifier, CatalogProduct, PublicCatalog } from '@/lib/catalog-schema';
+import {
+  removeCatalogProduct,
+  type CatalogModifier,
+  type CatalogProduct,
+  type PublicCatalog,
+} from '@/lib/catalog-schema';
 import InventoryAdmin from '@/components/inventory-admin';
+import SalesAdmin from '@/components/sales-admin';
 
-type View = 'summary' | 'products' | 'extras' | 'inventory' | 'business' | 'permissions';
+type View = 'summary' | 'sales' | 'products' | 'extras' | 'inventory' | 'business' | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
-const blankProduct = (): CatalogProduct => ({
+const blankProduct = (kind: CatalogProduct['kind'] = 'drink'): CatalogProduct => ({
   id: crypto.randomUUID(),
   name: '',
-  category: 'Cafés',
+  kind,
+  category: kind === 'snack' ? 'Snacks y repostería' : 'Cafés',
   description: '',
   prices: [0, 0, 0],
   active: true,
-  tone: 'coffee',
+  tone: kind === 'snack' ? 'cocoa' : 'coffee',
 });
 const blankModifier = (): CatalogModifier => ({
   id: crypto.randomUUID(),
@@ -41,7 +50,10 @@ export default function CatalogAdmin() {
   const [catalog, setCatalog] = useState<PublicCatalog | null>(null);
   const [etag, setEtag] = useState<string | null>(null);
   const [source, setSource] = useState<'supabase' | 'snapshot'>('snapshot');
-  const [adminUser, setAdminUser] = useState<{ username: string; role: 'admin' | 'developer' } | null>(null);
+  const [adminUser, setAdminUser] = useState<{
+    username: string;
+    role: 'admin' | 'developer';
+  } | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -169,15 +181,25 @@ export default function CatalogAdmin() {
           ? catalog.products.map((item) => (item.id === completed.id ? completed : item))
           : [...catalog.products, completed],
       };
-      if (
-        await save(next, exists ? 'Bebida actualizada en el menú.' : 'Bebida agregada al menú.')
-      ) {
+      const productLabel = completed.kind === 'snack' ? 'Snack' : 'Bebida';
+      if (await save(next, `${productLabel} ${exists ? 'actualizado' : 'agregado'} en el menú.`)) {
         setProduct(null);
         setImage(null);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible guardar la bebida.');
       setBusy(false);
+    }
+  }
+
+  async function deleteProduct(productId: string) {
+    if (!catalog) return;
+    const current = catalog.products.find((item) => item.id === productId);
+    if (!current) return;
+    const next = removeCatalogProduct(catalog, productId);
+    if (await save(next, `${current.kind === 'snack' ? 'Snack' : 'Bebida'} eliminado del menú.`)) {
+      setProduct(null);
+      setImage(null);
     }
   }
 
@@ -256,6 +278,12 @@ export default function CatalogAdmin() {
             onClick={() => setView('summary')}
           />
           <Nav
+            active={view === 'sales'}
+            icon={<BadgeDollarSign />}
+            label="Ventas"
+            onClick={() => setView('sales')}
+          />
+          <Nav
             active={view === 'products'}
             icon={<Coffee />}
             label="Menú"
@@ -287,7 +315,10 @@ export default function CatalogAdmin() {
           />
         </nav>
         <div className="catalog-session">
-          <p>{adminUser?.username} · {adminUser?.role === 'developer' ? 'Desarrollador' : 'Administrador'}</p>
+          <p>
+            {adminUser?.username} ·{' '}
+            {adminUser?.role === 'developer' ? 'Desarrollador' : 'Administrador'}
+          </p>
           <button onClick={() => void signOut()}>Cerrar sesión</button>
         </div>
       </aside>
@@ -299,15 +330,17 @@ export default function CatalogAdmin() {
             <h1>
               {view === 'summary'
                 ? 'Resumen'
-                : view === 'products'
-                  ? 'Menú'
-                  : view === 'extras'
-                    ? 'Extras'
-                    : view === 'inventory'
-                      ? 'Inventario'
-                    : view === 'business'
-                      ? 'Datos del negocio'
-                      : 'Permisos'}
+                : view === 'sales'
+                  ? 'Ventas del día'
+                  : view === 'products'
+                    ? 'Menú'
+                    : view === 'extras'
+                      ? 'Extras'
+                      : view === 'inventory'
+                        ? 'Inventario'
+                        : view === 'business'
+                          ? 'Datos del negocio'
+                          : 'Permisos'}
             </h1>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
@@ -334,9 +367,12 @@ export default function CatalogAdmin() {
           <>
             <section className="summary-grid">
               <article className="metric-card">
-                <span>BEBIDAS</span>
+                <span>PRODUCTOS</span>
                 <strong>{catalog.products.length}</strong>
-                <small>{catalog.products.filter((item) => item.active).length} visibles</small>
+                <small>
+                  {catalog.products.filter((item) => item.kind !== 'snack').length} bebidas ·{' '}
+                  {catalog.products.filter((item) => item.kind === 'snack').length} snacks
+                </small>
               </article>
               <article className="metric-card">
                 <span>EXTRAS</span>
@@ -348,7 +384,7 @@ export default function CatalogAdmin() {
               <article className="metric-card">
                 <span>FOTOGRAFÍAS</span>
                 <strong>{catalog.products.filter((item) => item.imageUrl).length}</strong>
-                <small>de {catalog.products.length} bebidas</small>
+                <small>de {catalog.products.length} productos</small>
               </article>
             </section>
             <section className="panel">
@@ -365,22 +401,35 @@ export default function CatalogAdmin() {
           </>
         )}
 
+        {view === 'sales' && <SalesAdmin />}
+
         {view === 'products' && (
           <section className="panel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">BEBIDAS</span>
+                <span className="eyebrow">BEBIDAS Y SNACKS</span>
                 <h2>Productos del menú</h2>
               </div>
-              <button
-                className="button"
-                onClick={() => {
-                  setProduct(blankProduct());
-                  setImage(null);
-                }}
-              >
-                <Plus size={17} /> Nueva bebida
-              </button>
+              <div className="inline-fields">
+                <button
+                  className="button"
+                  onClick={() => {
+                    setProduct(blankProduct('drink'));
+                    setImage(null);
+                  }}
+                >
+                  <Plus size={17} /> Nueva bebida
+                </button>
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setProduct(blankProduct('snack'));
+                    setImage(null);
+                  }}
+                >
+                  <Plus size={17} /> Nuevo snack
+                </button>
+              </div>
             </div>
             <div className="catalog-product-grid">
               {catalog.products.map((item) => (
@@ -402,7 +451,7 @@ export default function CatalogAdmin() {
                         setImage(null);
                       }}
                     >
-                      Editar bebida
+                      Editar {item.kind === 'snack' ? 'snack' : 'bebida'}
                     </button>
                   </div>
                 </article>
@@ -474,6 +523,7 @@ export default function CatalogAdmin() {
           product={product}
           image={image}
           busy={busy}
+          existing={catalog.products.some((item) => item.id === product.id)}
           onChange={setProduct}
           onImage={setImage}
           onCancel={() => {
@@ -481,6 +531,7 @@ export default function CatalogAdmin() {
             setImage(null);
           }}
           onSave={() => void saveProduct()}
+          onDelete={() => void deleteProduct(product.id)}
         />
       )}
       {modifier && (
@@ -503,7 +554,8 @@ function PermissionsPanel() {
       <span className="eyebrow">ACCESO AL ADMINISTRADOR</span>
       <h2>Perfiles definidos</h2>
       <p className="permissions-intro">
-        El acceso en línea usa cuentas privadas y contraseñas cifradas configuradas fuera del código.
+        El acceso en línea usa cuentas privadas y contraseñas cifradas configuradas fuera del
+        código.
       </p>
       <div className="permission-grid">
         <article>
@@ -511,7 +563,9 @@ function PermissionsPanel() {
           <div>
             <strong>Administrador del catálogo</strong>
             <span>3 cuentas documentadas</span>
-            <p>Puede editar bebidas, precios, extras, negocio, inventario, movimientos y recetas.</p>
+            <p>
+              Puede registrar ventas, generar comprobantes, editar el menú, inventario y recetas.
+            </p>
           </div>
         </article>
         <article>
@@ -554,19 +608,25 @@ function ProductEditor({
   product,
   image,
   busy,
+  existing,
   onChange,
   onImage,
   onCancel,
   onSave,
+  onDelete,
 }: {
   product: CatalogProduct;
   image: File | null;
   busy: boolean;
+  existing: boolean;
   onChange: (product: CatalogProduct) => void;
   onImage: (file: File | null) => void;
   onCancel: () => void;
   onSave: () => void;
+  onDelete: () => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const isSnack = product.kind === 'snack';
   const preview = useMemo(
     () => (image ? URL.createObjectURL(image) : product.imageUrl),
     [image, product.imageUrl],
@@ -585,8 +645,8 @@ function ProductEditor({
       >
         <div className="section-heading">
           <div>
-            <span className="eyebrow">EDITOR DE BEBIDA</span>
-            <h2>{product.name || 'Nueva bebida'}</h2>
+            <span className="eyebrow">EDITOR DE {isSnack ? 'SNACK' : 'BEBIDA'}</span>
+            <h2>{product.name || (isSnack ? 'Nuevo snack' : 'Nueva bebida')}</h2>
           </div>
           <button type="button" className="small-button" onClick={onCancel}>
             Cerrar
@@ -620,6 +680,32 @@ function ProductEditor({
         )}
         <div className="form-grid">
           <label className="field">
+            Tipo de producto
+            <select
+              value={product.kind}
+              onChange={(event) => {
+                const kind = event.target.value as CatalogProduct['kind'];
+                onChange({
+                  ...product,
+                  kind,
+                  category:
+                    product.category === 'Cafés' || product.category === 'Snacks y repostería'
+                      ? kind === 'snack'
+                        ? 'Snacks y repostería'
+                        : 'Cafés'
+                      : product.category,
+                  prices:
+                    kind === 'snack'
+                      ? [product.prices[0], product.prices[0], product.prices[0]]
+                      : product.prices,
+                });
+              }}
+            >
+              <option value="drink">Bebida</option>
+              <option value="snack">Snack o repostería</option>
+            </select>
+          </label>
+          <label className="field">
             Nombre
             <input
               required
@@ -651,27 +737,45 @@ function ProductEditor({
           />
         </label>
         <fieldset>
-          <legend>Precios por tamaño</legend>
-          <div className="form-grid three">
-            {sizes.map((size, index) => (
-              <label className="field" key={size}>
-                {size}
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  max="1000000"
-                  step="0.01"
-                  value={(product.prices[index] / 100).toString()}
-                  onChange={(event) => {
-                    const prices = [...product.prices];
-                    prices[index] = Math.round(Number(event.target.value) * 100);
-                    onChange({ ...product, prices });
-                  }}
-                />
-              </label>
-            ))}
-          </div>
+          <legend>{isSnack ? 'Precio por pieza' : 'Precios por tamaño'}</legend>
+          {isSnack ? (
+            <label className="field">
+              Precio
+              <input
+                required
+                type="number"
+                min="0"
+                max="1000000"
+                step="0.01"
+                value={(product.prices[0] / 100).toString()}
+                onChange={(event) => {
+                  const price = Math.round(Number(event.target.value) * 100);
+                  onChange({ ...product, prices: [price, price, price] });
+                }}
+              />
+            </label>
+          ) : (
+            <div className="form-grid three">
+              {sizes.map((size, index) => (
+                <label className="field" key={size}>
+                  {size}
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    max="1000000"
+                    step="0.01"
+                    value={(product.prices[index] / 100).toString()}
+                    onChange={(event) => {
+                      const prices = [...product.prices];
+                      prices[index] = Math.round(Number(event.target.value) * 100);
+                      onChange({ ...product, prices });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
         </fieldset>
         <div className="form-grid">
           <label className="field">
@@ -698,12 +802,46 @@ function ProductEditor({
         </div>
         <div className="inline-fields">
           <button className="button" disabled={busy}>
-            <Save size={17} /> {busy ? 'Guardando…' : 'Guardar bebida'}
+            <Save size={17} /> {busy ? 'Guardando…' : `Guardar ${isSnack ? 'snack' : 'bebida'}`}
           </button>
           <button type="button" className="small-button" disabled={busy} onClick={onCancel}>
             Cancelar
           </button>
         </div>
+        {existing && (
+          <div className="delete-product-zone">
+            {confirmingDelete ? (
+              <>
+                <div>
+                  <strong>¿Eliminar “{product.name}”?</strong>
+                  <p>Desaparecerá del menú público y de la caja. Esta acción no se puede deshacer.</p>
+                </div>
+                <div className="inline-fields">
+                  <button type="button" className="danger-button" disabled={busy} onClick={onDelete}>
+                    <Trash2 size={16} /> Sí, eliminar producto
+                  </button>
+                  <button
+                    type="button"
+                    className="small-button"
+                    disabled={busy}
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    Conservar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="text-button danger-text"
+                disabled={busy}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Trash2 size={15} /> Eliminar {isSnack ? 'snack' : 'bebida'}
+              </button>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

@@ -12,6 +12,7 @@ export const catalogProductSchema = z.object({
     .trim()
     .regex(/^[a-z0-9-]{1,80}$/),
   name: z.string().trim().min(2).max(100),
+  kind: z.enum(['drink', 'snack']).default('drink'),
   category: z.string().trim().min(2).max(60),
   description: z.string().trim().min(5).max(500),
   prices: z.array(cents).length(3),
@@ -65,3 +66,14 @@ export const catalogSchema = z
 export type PublicCatalog = z.infer<typeof catalogSchema>;
 export type CatalogProduct = z.infer<typeof catalogProductSchema>;
 export type CatalogModifier = z.infer<typeof catalogModifierSchema>;
+
+export function removeCatalogProduct(catalog: PublicCatalog, productId: string): PublicCatalog {
+  return {
+    ...catalog,
+    products: catalog.products.filter((product) => product.id !== productId),
+    modifiers: catalog.modifiers.map((modifier) => ({
+      ...modifier,
+      productIds: modifier.productIds?.filter((id) => id !== productId) ?? modifier.productIds,
+    })),
+  };
+}

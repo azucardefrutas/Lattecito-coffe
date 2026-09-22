@@ -11,6 +11,11 @@ import {
   type InventoryState,
 } from './inventory-schema';
 import { calculate, sizes, type Line, type Product } from './model';
+import {
+  dailySalesBreakdown,
+  type DailySalesBreakdown,
+  type DetailedSaleItem,
+} from './sales-summary';
 
 type UserRole = 'admin' | 'developer';
 
@@ -23,7 +28,7 @@ export type MobileSale = {
   confirmedBy: string;
   customer: string;
   note: string;
-  items: { name: string; size: string; quantity: number; unitPrice: number; cost: number }[];
+  items: DetailedSaleItem[];
   subtotal: number;
   total: number;
   cost: number;
@@ -31,6 +36,16 @@ export type MobileSale = {
   paymentStatus: 'Pagado' | 'Pendiente';
   received: number;
   change: number;
+};
+
+export type ArchivedSalesDay = {
+  date: string;
+  tickets: number;
+  total: number;
+  cash: number;
+  transfers: number;
+  pendingTransfers: number;
+  cost: number;
 };
 
 export class SupabaseConflictError extends Error {}
@@ -60,12 +75,17 @@ export async function ensureSupabase() {
   if (ready) return ready;
   ready = (async () => {
     const client = serverClient();
-    const { data, error } = await client.from('catalog_state').select('id').eq('id', 1).maybeSingle();
+    const { data, error } = await client
+      .from('catalog_state')
+      .select('id')
+      .eq('id', 1)
+      .maybeSingle();
     if (error) throw databaseError('No fue posible preparar el catálogo central.', error);
     if (!data) {
       const catalog = catalogSchema.parse(snapshot);
       const seeded = await client.from('catalog_state').insert({ id: 1, catalog });
-      if (seeded.error) throw databaseError('No fue posible crear el catálogo central.', seeded.error);
+      if (seeded.error)
+        throw databaseError('No fue posible crear el catálogo central.', seeded.error);
     }
   })().catch((error) => {
     ready = null;
@@ -195,7 +215,11 @@ export async function readInventoryState(): Promise<InventoryState> {
   const [itemsResult, recipesResult, movementsResult] = await Promise.all([
     client.from('inventory_items').select('*').order('name'),
     client.from('inventory_recipes').select('*').order('target_type').order('target_id'),
-    client.from('inventory_movements').select('*').order('created_at', { ascending: false }).limit(100),
+    client
+      .from('inventory_movements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100),
   ]);
   if (itemsResult.error) throw databaseError('No fue posible leer los insumos.', itemsResult.error);
   if (recipesResult.error)
@@ -280,11 +304,16 @@ export async function saveInventoryRecipe(input: unknown) {
       ? catalog.products.some((product) => product.id === parsed.targetId)
       : catalog.modifiers.some((modifier) => modifier.id === parsed.targetId);
   if (!exists) throw new Error('El producto o extra de la receta no existe.');
-  if (new Set(parsed.ingredients.map((ingredient) => ingredient.itemId)).size !== parsed.ingredients.length)
+  if (
+    new Set(parsed.ingredients.map((ingredient) => ingredient.itemId)).size !==
+    parsed.ingredients.length
+  )
     throw new Error('Un insumo no puede repetirse dentro de la misma receta.');
   const inventory = await readInventoryState();
   for (const ingredient of parsed.ingredients) {
-    const item = inventory.items.find((candidate) => candidate.id === ingredient.itemId && candidate.active);
+    const item = inventory.items.find(
+      (candidate) => candidate.id === ingredient.itemId && candidate.active,
+    );
     if (!item) throw new Error('La receta contiene un insumo inactivo o inexistente.');
     validateUnitQuantity(ingredient.quantity, item.unit);
   }
@@ -351,13 +380,13 @@ export async function createMobileSale(input: {
       if (!item)
         throw new Error(`La receta de ${product.name} contiene un insumo inactivo o inexistente.`);
       validateUnitQuantity(ingredient.quantity, item.unit);
-      needs.set(
-        item.id,
-        (needs.get(item.id) ?? 0) + ingredient.quantity * line.quantity,
-      );
+      needs.set(item.id, (needs.get(item.id) ?? 0) + ingredient.quantity * line.quantity);
       recipeCost += ingredient.quantity * item.costPerUnit;
     }
-    return { ...quoted, cost: recipe.length || modifierRecipes.length ? Math.round(recipeCost) : quoted.cost };
+    return {
+      ...quoted,
+      cost: recipe.length || modifierRecipes.length ? Math.round(recipeCost) : quoted.cost,
+    };
   });
   const quote = {
     items,
@@ -433,16 +462,40 @@ export async function readMobileDashboard() {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date());
-  const result = await serverClient()
-    .from('admin_sales')
-    .select('*')
-    .eq('business_date', today)
-    .order('created_at', { ascending: false })
-    .limit(200);
+  const client = serverClient();
+  const purge = await client.rpc('purge_old_admin_sales');
+  if (purge.error)
+    throw databaseError('No fue posible aplicar la retención de ventas.', purge.error);
+  const weekStart = new Date(`${today}T12:00:00-05:00`);
+  weekStart.setDate(weekStart.getDate() - 6);
+  const weekStartDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Cancun',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(weekStart);
+  const [result, historyResult] = await Promise.all([
+    client
+      .from('admin_sales')
+      .select('*')
+      .eq('business_date', today)
+      .order('created_at', { ascending: false })
+      .limit(200),
+    client
+      .from('daily_sales_totals')
+      .select(
+        'business_date, ticket_count, paid_total, cash_total, transfer_total, pending_total, cost_total',
+      )
+      .gte('business_date', weekStartDate)
+      .order('business_date', { ascending: false }),
+  ]);
   if (result.error) throw databaseError('No fue posible leer las ventas del día.', result.error);
+  if (historyResult.error)
+    throw databaseError('No fue posible leer el historial diario.', historyResult.error);
   const sales = (result.data ?? []).map((row) => saleFromRow(row));
   const paid = sales.filter((sale) => sale.paymentStatus === 'Pagado');
-  const total = paid.reduce((sum, sale) => sum + sale.total, 0);
+  const daily: DailySalesBreakdown = dailySalesBreakdown(sales);
+  const total = daily.total;
   const totalCost = paid.reduce((sum, sale) => sum + sale.cost, 0);
   const missingCostCount = catalog.products.filter(
     (product) => product.active && !(costs.get(product.id) ?? []).some((cost) => cost > 0),
@@ -450,22 +503,26 @@ export async function readMobileDashboard() {
   return {
     catalog,
     inventory,
+    daily,
+    history: (historyResult.data ?? []).map((row) => ({
+      date: String(row.business_date),
+      tickets: Number(row.ticket_count),
+      total: Number(row.paid_total),
+      cash: Number(row.cash_total),
+      transfers: Number(row.transfer_total),
+      pendingTransfers: Number(row.pending_total),
+      cost: Number(row.cost_total),
+    })) satisfies ArchivedSalesDay[],
     costs: Object.fromEntries(catalog.products.map((p) => [p.id, costs.get(p.id) ?? [0, 0, 0]])),
     sales,
     summary: {
       total,
-      cash: paid
-        .filter((sale) => sale.payment === 'Efectivo')
-        .reduce((sum, sale) => sum + sale.total, 0),
-      transfers: paid
-        .filter((sale) => sale.payment === 'Transferencia')
-        .reduce((sum, sale) => sum + sale.total, 0),
-      pendingTransfers: sales
-        .filter((sale) => sale.paymentStatus === 'Pendiente')
-        .reduce((sum, sale) => sum + sale.total, 0),
+      cash: daily.cash,
+      transfers: daily.transfers,
+      pendingTransfers: daily.pendingTransfers,
       grossProfit: total - totalCost,
       missingCostCount,
-      tickets: sales.length,
+      tickets: daily.tickets,
     },
   };
 }
@@ -513,11 +570,13 @@ export async function uploadProductImage(image: File, extension: string) {
   await ensureSupabase();
   const path = `products/${crypto.randomUUID()}.${extension}`;
   const client = serverClient();
-  const { error } = await client.storage.from('product-images').upload(path, await image.arrayBuffer(), {
-    contentType: image.type,
-    cacheControl: '31536000',
-    upsert: false,
-  });
+  const { error } = await client.storage
+    .from('product-images')
+    .upload(path, await image.arrayBuffer(), {
+      contentType: image.type,
+      cacheControl: '31536000',
+      upsert: false,
+    });
   if (error) throw databaseError('No fue posible subir la imagen.', error);
   return client.storage.from('product-images').getPublicUrl(path).data.publicUrl;
 }

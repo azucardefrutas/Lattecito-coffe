@@ -14,9 +14,10 @@ export function publicMenu(s: Store): PublicCatalog {
   return {
     products: s.products
       .filter((p) => p.active)
-      .map(({ id, name, category, description, prices, active, tone, imageUrl }) => ({
+      .map(({ id, name, kind, category, description, prices, active, tone, imageUrl }) => ({
         id,
         name,
+        kind: kind ?? 'drink',
         category,
         description,
         prices,

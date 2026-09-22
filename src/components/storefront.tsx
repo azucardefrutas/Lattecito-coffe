@@ -69,7 +69,9 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
       setSelected((current) => {
         if (!current) return null;
         const updated = nextProducts.find((p: Product) => p.id === current.id);
-        return updated && JSON.stringify(updated) === JSON.stringify(current) ? current : updated ?? null;
+        return updated && JSON.stringify(updated) === JSON.stringify(current)
+          ? current
+          : (updated ?? null);
       });
       setModifiers(d.modifiers ?? []);
       setSettings(d.settings);
@@ -177,6 +179,9 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
           <a href="/#visitanos" onClick={() => setNav(false)}>
             Encuéntranos
           </a>
+          <a href="/#comunidad" onClick={() => setNav(false)}>
+            Síguenos
+          </a>
         </nav>
         <div className="header-actions">
           <button
@@ -231,8 +236,8 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
               </div>
               <div className="hero-photo">
                 <Image
-                  src="/hero-latte.png"
-                  alt="Latte helado y matcha sobre una barra color terracota. Imagen conceptual de Lattecito."
+                  src="/hero-lattecito-real.jpg"
+                  alt="Cliente disfrutando una bebida de Lattecito Coffee."
                   fill
                   priority
                   sizes="(max-width: 760px) 100vw, 50vw"
@@ -382,6 +387,86 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                 Encuentra tu momento <ArrowRight size={17} />
               </Link>
             </div>
+          </section>
+        )}
+        {!menuOnly && (
+          <section className="community" id="comunidad">
+            <div className="community-copy">
+              <span className="eyebrow">LA COMUNIDAD LATTECITO</span>
+              <h2>
+                Novedades, sabores
+                <br />y bonitos momentos.
+              </h2>
+              <p>
+                Sigue nuestras redes y únete al canal de WhatsApp para conocer bebidas nuevas,
+                horarios y promociones.
+              </p>
+              <div className="social-grid" aria-label="Redes sociales de Lattecito Coffee">
+                <a
+                  className="social-card instagram"
+                  href="https://www.instagram.com/lattecitocoffee?stkn=MXcxaHdtbzFycHVhYw=="
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Image src="/brands/instagram.svg" alt="" width={34} height={34} />
+                  <span>
+                    <strong>Instagram</strong>
+                    @lattecitocoffee
+                  </span>
+                  <ArrowUpRight size={18} />
+                </a>
+                <a
+                  className="social-card facebook"
+                  href="https://www.facebook.com/share/1Dzbd4mMZv/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Image src="/brands/facebook.svg" alt="" width={34} height={34} />
+                  <span>
+                    <strong>Facebook</strong>
+                    Lattecito Coffee
+                  </span>
+                  <ArrowUpRight size={18} />
+                </a>
+                <a
+                  className="social-card whatsapp"
+                  href="https://whatsapp.com/channel/0029Vb8jKkKFSAt7WjRJYy16"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Image src="/brands/whatsapp.svg" alt="" width={34} height={34} />
+                  <span>
+                    <strong>Canal de WhatsApp</strong>
+                    Únete al canal
+                  </span>
+                  <ArrowUpRight size={18} />
+                </a>
+                <div className="social-card tiktok pending" aria-label="TikTok, próximamente">
+                  <Image src="/brands/tiktok.svg" alt="" width={34} height={34} />
+                  <span>
+                    <strong>TikTok</strong>
+                    En preparación
+                  </span>
+                  <small>PRÓXIMAMENTE</small>
+                </div>
+              </div>
+            </div>
+            <a
+              className="channel-qr"
+              href="https://whatsapp.com/channel/0029Vb8jKkKFSAt7WjRJYy16"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Abrir el canal de WhatsApp de Lattecito Coffee"
+            >
+              <Image
+                src="/qr-canal-whatsapp.png"
+                alt="Código QR para abrir el canal de WhatsApp de Lattecito Coffee."
+                width={1200}
+                height={1420}
+                sizes="(max-width: 760px) 88vw, 390px"
+              />
+              <span>También puedes tocar el QR para abrir el canal.</span>
+            </a>
           </section>
         )}
         <section className="contact" id="visitanos">
