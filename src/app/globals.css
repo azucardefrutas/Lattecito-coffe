@@ -1923,6 +1923,10 @@ tr:hover td {
   cursor: wait;
   opacity: 0.6;
 }
+.danger-button.compact-danger {
+  padding: 8px 13px;
+  font-size: 13px;
+}
 .danger-text {
   display: inline-flex;
   align-items: center;
@@ -2843,6 +2847,9 @@ tr:hover td {
   background: transparent;
   border-radius: 0;
   padding: 0;
+}
+.correction-dialog textarea {
+  min-height: 100px;
 }
 
 @media (max-width: 900px) {

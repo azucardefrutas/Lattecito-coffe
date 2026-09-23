@@ -36,6 +36,9 @@ export type MobileSale = {
   paymentStatus: 'Pagado' | 'Pendiente';
   received: number;
   change: number;
+  lastEditedAt: string;
+  lastEditedBy: string;
+  correctionReason: string;
 };
 
 export type ArchivedSalesDay = {
@@ -170,6 +173,9 @@ function saleFromRow(row: Record<string, unknown>): MobileSale {
     paymentStatus: row.payment_status as MobileSale['paymentStatus'],
     received: Number(row.received),
     change: Number(row.change),
+    lastEditedAt: row.last_edited_at ? new Date(String(row.last_edited_at)).toISOString() : '',
+    lastEditedBy: row.last_edited_by ? String(row.last_edited_by) : '',
+    correctionReason: row.correction_reason ? String(row.correction_reason) : '',
   };
 }
 
@@ -339,25 +345,13 @@ export async function saveInventoryRecipe(input: unknown) {
   return parsed;
 }
 
-export async function createMobileSale(input: {
-  id: string;
-  user: MobileUser;
-  lines: Line[];
-  payment: 'Efectivo' | 'Transferencia';
-  received: number;
-  customer: string;
-  note: string;
-}) {
-  const client = serverClient();
-  const existing = await client.from('admin_sales').select('*').eq('id', input.id).maybeSingle();
-  if (existing.error) throw databaseError('No fue posible revisar la venta.', existing.error);
-  if (existing.data) return saleFromRow(existing.data);
+async function quoteMobileSale(lines: Line[]) {
   const [{ catalog }, costs, inventory] = await Promise.all([
     readSupabaseCatalog(),
     readCosts(),
     readInventoryState(),
   ]);
-  const base = calculate(operationalProducts(catalog, costs), input.lines, 0, catalog.modifiers);
+  const base = calculate(operationalProducts(catalog, costs), lines, 0, catalog.modifiers);
   const recipes = new Map(
     inventory.recipes.map((recipe) => [
       `${recipe.targetType}:${recipe.targetId}:${recipe.sizeIndex}`,
@@ -366,7 +360,7 @@ export async function createMobileSale(input: {
   );
   const needs = new Map<string, number>();
   const items = base.items.map((quoted, index) => {
-    const line = input.lines[index];
+    const line = lines[index];
     const product = catalog.products.find((candidate) => candidate.id === line.productId)!;
     const recipe = recipes.get(`product:${line.productId}:${line.size}`) ?? [];
     const modifierRecipes = (line.modifierIds ?? []).flatMap(
@@ -394,6 +388,26 @@ export async function createMobileSale(input: {
     total: base.total,
     cost: items.reduce((sum, item) => sum + item.cost * item.quantity, 0),
   };
+  return {
+    quote,
+    consumption: [...needs].map(([itemId, quantity]) => ({ itemId, quantity })),
+  };
+}
+
+export async function createMobileSale(input: {
+  id: string;
+  user: MobileUser;
+  lines: Line[];
+  payment: 'Efectivo' | 'Transferencia';
+  received: number;
+  customer: string;
+  note: string;
+}) {
+  const client = serverClient();
+  const existing = await client.from('admin_sales').select('*').eq('id', input.id).maybeSingle();
+  if (existing.error) throw databaseError('No fue posible revisar la venta.', existing.error);
+  if (existing.data) return saleFromRow(existing.data);
+  const { quote, consumption } = await quoteMobileSale(input.lines);
   if (input.payment === 'Efectivo' && input.received < quote.total)
     throw new Error('El efectivo recibido es insuficiente.');
   const status = input.payment === 'Efectivo' ? 'Pagado' : 'Pendiente';
@@ -412,12 +426,74 @@ export async function createMobileSale(input: {
     p_payment_status: status,
     p_received: received,
     p_change: change,
-    p_consumption: [...needs].map(([itemId, quantity]) => ({ itemId, quantity })),
+    p_consumption: consumption,
   });
   if (error) throw new Error(error.message || 'No fue posible registrar la venta.');
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error('No fue posible registrar la venta.');
   return saleFromRow(row as Record<string, unknown>);
+}
+
+export async function correctMobileSale(input: {
+  saleId: string;
+  user: MobileUser;
+  reason: string;
+  lines: Line[];
+  payment: 'Efectivo' | 'Transferencia';
+  received: number;
+  customer: string;
+  note: string;
+}) {
+  await ensureSupabase();
+  const client = serverClient();
+  const existing = await client
+    .from('admin_sales')
+    .select('*')
+    .eq('id', input.saleId)
+    .maybeSingle();
+  if (existing.error) throw databaseError('No fue posible revisar el ticket.', existing.error);
+  if (!existing.data) throw new Error('El ticket no existe.');
+  const { quote, consumption } = await quoteMobileSale(input.lines);
+  if (input.payment === 'Efectivo' && input.received < quote.total)
+    throw new Error('El efectivo recibido es insuficiente.');
+  const keepsConfirmedTransfer =
+    input.payment === 'Transferencia' &&
+    existing.data.payment_method === 'Transferencia' &&
+    existing.data.payment_status === 'Pagado';
+  const status = input.payment === 'Efectivo' || keepsConfirmedTransfer ? 'Pagado' : 'Pendiente';
+  const received = input.payment === 'Efectivo' ? input.received : quote.total;
+  const change = input.payment === 'Efectivo' ? input.received - quote.total : 0;
+  const { data, error } = await client.rpc('correct_admin_sale_with_inventory', {
+    p_id: input.saleId,
+    p_editor: input.user.username,
+    p_reason: input.reason,
+    p_customer: input.customer,
+    p_note: input.note,
+    p_items: quote.items,
+    p_subtotal: quote.subtotal,
+    p_total: quote.total,
+    p_cost: quote.cost,
+    p_payment_method: input.payment,
+    p_payment_status: status,
+    p_received: received,
+    p_change: change,
+    p_consumption: consumption,
+  });
+  if (error) throw new Error(error.message || 'No fue posible corregir el ticket.');
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('No fue posible corregir el ticket.');
+  return saleFromRow(row as Record<string, unknown>);
+}
+
+export async function deleteMobileSale(id: string, reason: string, user: MobileUser) {
+  await ensureSupabase();
+  const { data, error } = await serverClient().rpc('delete_admin_sale_with_inventory', {
+    p_id: id,
+    p_deleted_by: user.username,
+    p_reason: reason,
+  });
+  if (error) throw new Error(error.message || 'No fue posible eliminar el ticket.');
+  return { number: Number(data) };
 }
 
 export async function confirmMobileTransfer(id: string, user: MobileUser) {

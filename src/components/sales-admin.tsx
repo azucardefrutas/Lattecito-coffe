@@ -1,7 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Minus, Plus, Printer, ReceiptText, Share2, ShoppingCart } from 'lucide-react';
+import {
+  Minus,
+  Pencil,
+  Plus,
+  Printer,
+  ReceiptText,
+  Share2,
+  ShoppingCart,
+  Trash2,
+} from 'lucide-react';
 import type { PublicCatalog } from '@/lib/catalog-schema';
 import { money, sizes } from '@/lib/model';
 import {
@@ -50,6 +59,10 @@ export default function SalesAdmin() {
   const [customer, setCustomer] = useState('');
   const [note, setNote] = useState('');
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -129,7 +142,7 @@ export default function SalesAdmin() {
     }));
   }
 
-  async function send(body: object) {
+  async function send<T = Sale>(body: object) {
     const response = await fetch('/api/catalog-admin/sales', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -137,7 +150,45 @@ export default function SalesAdmin() {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? 'No fue posible guardar la venta.');
-    return result as Sale;
+    return result as T;
+  }
+
+  function clearCheckout() {
+    setCart({});
+    setReceived('');
+    setCustomer('');
+    setNote('');
+    setEditingSale(null);
+    setCorrectionReason('');
+  }
+
+  function editSale(sale: Sale) {
+    const next: Record<string, CartLine> = {};
+    for (const item of sale.items) {
+      if (!item.productId || item.sizeIndex === undefined) {
+        setError(
+          'Este ticket antiguo no contiene los datos necesarios para editarlo. Puedes eliminarlo.',
+        );
+        return;
+      }
+      const id = key(item.productId, item.sizeIndex);
+      next[id] = {
+        productId: item.productId,
+        size: item.sizeIndex,
+        quantity: item.quantity,
+        modifierIds: (item.extras ?? []).map((extra) => extra.id).filter(Boolean),
+      };
+    }
+    setCart(next);
+    setPayment(sale.payment);
+    setReceived(sale.payment === 'Efectivo' ? String(sale.received / 100) : '');
+    setCustomer(sale.customer ?? '');
+    setNote(sale.note ?? '');
+    setCorrectionReason('');
+    setEditingSale(sale);
+    setReceipt(null);
+    setError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function completeSale() {
@@ -147,28 +198,64 @@ export default function SalesAdmin() {
       setError('El efectivo recibido es menor que el total.');
       return;
     }
+    if (editingSale && correctionReason.trim().length < 5) {
+      setError('Indica el motivo de la corrección con al menos 5 caracteres.');
+      return;
+    }
     setBusy(true);
     setError('');
     setNotice('');
     try {
       const sale = await send({
-        action: 'sale',
-        id: crypto.randomUUID(),
+        action: editingSale ? 'edit-sale' : 'sale',
+        ...(editingSale
+          ? { saleId: editingSale.id, reason: correctionReason.trim() }
+          : { id: crypto.randomUUID() }),
         customer: customer.trim(),
         note: note.trim(),
         lines,
         payment,
         received: payment === 'Efectivo' ? receivedCents : 0,
       });
-      setCart({});
-      setReceived('');
-      setCustomer('');
-      setNote('');
+      const corrected = Boolean(editingSale);
+      clearCheckout();
       setReceipt(sale);
-      setNotice(`Venta #${sale.number} registrada.`);
+      setNotice(
+        corrected
+          ? `Ticket #${sale.number} corregido y totales recalculados.`
+          : `Venta #${sale.number} registrada.`,
+      );
       await load(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible registrar la venta.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSale() {
+    if (!deleteTarget) return;
+    if (deleteReason.trim().length < 5) {
+      setError('Indica el motivo de la eliminación con al menos 5 caracteres.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const deleted = deleteTarget;
+      await send<{ number: number }>({
+        action: 'delete-sale',
+        saleId: deleted.id,
+        reason: deleteReason.trim(),
+      });
+      if (editingSale?.id === deleted.id) clearCheckout();
+      if (receipt?.id === deleted.id) setReceipt(null);
+      setDeleteTarget(null);
+      setDeleteReason('');
+      setNotice(`Ticket #${deleted.number} eliminado. Inventario y totales fueron corregidos.`);
+      await load(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible eliminar el ticket.');
     } finally {
       setBusy(false);
     }
@@ -305,7 +392,9 @@ export default function SalesAdmin() {
         <div className="section-heading">
           <div>
             <span className="eyebrow">CAJA</span>
-            <h2>Registrar nueva venta</h2>
+            <h2>
+              {editingSale ? `Corregir ticket #${editingSale.number}` : 'Registrar nueva venta'}
+            </h2>
           </div>
           <ShoppingCart size={26} />
         </div>
@@ -421,14 +510,36 @@ export default function SalesAdmin() {
                 onChange={(event) => setNote(event.target.value)}
               />
             </label>
+            {editingSale && (
+              <label className="field">
+                Motivo de la corrección
+                <textarea
+                  maxLength={300}
+                  minLength={5}
+                  required
+                  value={correctionReason}
+                  onChange={(event) => setCorrectionReason(event.target.value)}
+                  placeholder="Ej. se capturó una bebida equivocada"
+                />
+              </label>
+            )}
             {payment === 'Transferencia' && (
               <p className="notice">
                 La transferencia quedará en espera y no se sumará como cobrada hasta confirmarla.
               </p>
             )}
             <button className="button" disabled={busy} onClick={() => void completeSale()}>
-              {busy ? 'Guardando…' : 'Cobrar y generar comprobante'}
+              {busy
+                ? 'Guardando…'
+                : editingSale
+                  ? 'Guardar corrección'
+                  : 'Cobrar y generar comprobante'}
             </button>
+            {editingSale && (
+              <button className="small-button" disabled={busy} onClick={clearCheckout}>
+                Cancelar corrección
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -460,6 +571,19 @@ export default function SalesAdmin() {
               <div className="inline-fields">
                 <button className="small-button" onClick={() => setReceipt(sale)}>
                   Ver comprobante
+                </button>
+                <button className="small-button" disabled={busy} onClick={() => editSale(sale)}>
+                  <Pencil size={15} /> Editar
+                </button>
+                <button
+                  className="danger-button compact-danger"
+                  disabled={busy}
+                  onClick={() => {
+                    setDeleteTarget(sale);
+                    setDeleteReason('');
+                  }}
+                >
+                  <Trash2 size={15} /> Eliminar
                 </button>
                 {sale.paymentStatus === 'Pendiente' && (
                   <button
@@ -544,6 +668,44 @@ export default function SalesAdmin() {
               </button>
               <button className="small-button" onClick={() => setReceipt(null)}>
                 Cerrar
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="catalog-overlay receipt-overlay">
+          <article className="receipt digital-receipt correction-dialog">
+            <span className="eyebrow">CORRECCIÓN DE CAJA</span>
+            <h2>Eliminar ticket #{deleteTarget.number}</h2>
+            <p>
+              Se restará del total del día y se repondrán automáticamente los insumos que consumió.
+            </p>
+            <label className="field">
+              Motivo obligatorio
+              <textarea
+                autoFocus
+                maxLength={300}
+                minLength={5}
+                value={deleteReason}
+                onChange={(event) => setDeleteReason(event.target.value)}
+                placeholder="Ej. ticket duplicado"
+              />
+            </label>
+            <div className="inline-fields receipt-actions">
+              <button className="danger-button" disabled={busy} onClick={() => void deleteSale()}>
+                <Trash2 size={16} /> {busy ? 'Eliminando…' : 'Eliminar ticket'}
+              </button>
+              <button
+                className="small-button"
+                disabled={busy}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteReason('');
+                }}
+              >
+                Cancelar
               </button>
             </div>
           </article>

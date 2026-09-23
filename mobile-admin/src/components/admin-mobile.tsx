@@ -84,10 +84,14 @@ function SaleCard({
   sale,
   onConfirm,
   onOpen,
+  onEdit,
+  onDelete,
 }: {
   sale: Sale;
   onConfirm: (id: string) => void;
   onOpen: (sale: Sale) => void;
+  onEdit: (sale: Sale) => void;
+  onDelete: (sale: Sale) => void;
 }) {
   const pending = sale.paymentStatus === 'Pendiente';
   return (
@@ -128,6 +132,8 @@ function SaleCard({
         <ActionButton label="Confirmar transferencia" onPress={() => onConfirm(sale.id)} />
       )}
       <ActionButton label="Ver comprobante" tone="light" onPress={() => onOpen(sale)} />
+      <ActionButton label="Editar ticket" tone="light" onPress={() => onEdit(sale)} />
+      <ActionButton label="Eliminar ticket" tone="danger" onPress={() => onDelete(sale)} />
     </View>
   );
 }
@@ -144,6 +150,10 @@ export function AdminMobile() {
   const [customer, setCustomer] = useState('');
   const [note, setNote] = useState('');
   const [ticket, setTicket] = useState<Sale | null>(null);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [costDrafts, setCostDrafts] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -251,6 +261,44 @@ export function AdminMobile() {
     }));
   };
 
+  const clearCheckout = () => {
+    setCart({});
+    setReceived('');
+    setCustomer('');
+    setNote('');
+    setEditingSale(null);
+    setCorrectionReason('');
+  };
+
+  const editSale = (sale: Sale) => {
+    const next: Record<string, CartLine> = {};
+    for (const item of sale.items) {
+      if (!item.productId || item.sizeIndex === undefined) {
+        setError(
+          'Este ticket antiguo no contiene los datos necesarios para editarlo. Puedes eliminarlo.',
+        );
+        return;
+      }
+      const key = cartKey(item.productId, item.sizeIndex);
+      next[key] = {
+        productId: item.productId,
+        size: item.sizeIndex,
+        quantity: item.quantity,
+        modifierIds: (item.extras ?? []).map((extra) => extra.id).filter(Boolean),
+      };
+    }
+    setCart(next);
+    setPayment(sale.payment);
+    setReceived(sale.payment === 'Efectivo' ? String(sale.received / 100) : '');
+    setCustomer(sale.customer);
+    setNote(sale.note);
+    setCorrectionReason('');
+    setEditingSale(sale);
+    setTicket(null);
+    setTab('caja');
+    setError('');
+  };
+
   const completeSale = async () => {
     if (!token || !cartLines.length) return;
     const receivedCents = Math.round(Number(received || 0) * 100);
@@ -258,12 +306,18 @@ export function AdminMobile() {
       setError('El efectivo recibido es insuficiente.');
       return;
     }
+    if (editingSale && correctionReason.trim().length < 5) {
+      setError('Indica el motivo de la corrección con al menos 5 caracteres.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       const sale = await sendCommand<Sale>(token, {
-        action: 'sale',
-        id: Crypto.randomUUID(),
+        action: editingSale ? 'edit-sale' : 'sale',
+        ...(editingSale
+          ? { saleId: editingSale.id, reason: correctionReason.trim() }
+          : { id: Crypto.randomUUID() }),
         customer: customer.trim(),
         note: note.trim(),
         lines: cartLines,
@@ -271,13 +325,39 @@ export function AdminMobile() {
         received: payment === 'Efectivo' ? receivedCents : 0,
       });
       setTicket(sale);
-      setCart({});
-      setReceived('');
-      setCustomer('');
-      setNote('');
+      clearCheckout();
       await refresh(token);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'No fue posible cobrar.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteSale = async () => {
+    if (!token || !deleteTarget) return;
+    if (deleteReason.trim().length < 5) {
+      setError('Indica el motivo de la eliminación con al menos 5 caracteres.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const deletedId = deleteTarget.id;
+      await sendCommand(token, {
+        action: 'delete-sale',
+        saleId: deletedId,
+        reason: deleteReason.trim(),
+      });
+      if (editingSale?.id === deletedId) clearCheckout();
+      if (ticket?.id === deletedId) setTicket(null);
+      setDeleteTarget(null);
+      setDeleteReason('');
+      await refresh(token);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'No fue posible eliminar el ticket.',
+      );
     } finally {
       setBusy(false);
     }
@@ -417,7 +497,14 @@ export function AdminMobile() {
           ) : null}
           <Text style={styles.sectionTitle}>Últimos tickets</Text>
           {dashboard.sales.slice(0, 4).map((sale) => (
-            <SaleCard key={sale.id} sale={sale} onConfirm={confirmTransfer} onOpen={setTicket} />
+            <SaleCard
+              key={sale.id}
+              sale={sale}
+              onConfirm={confirmTransfer}
+              onDelete={setDeleteTarget}
+              onEdit={editSale}
+              onOpen={setTicket}
+            />
           ))}
           {!dashboard.sales.length && <Text style={styles.empty}>Todavía no hay ventas hoy.</Text>}
           <Text style={styles.sectionTitle}>Suma por producto</Text>
@@ -472,7 +559,14 @@ export function AdminMobile() {
         <View style={styles.section}>
           <Text style={styles.pageTitle}>Ventas de hoy</Text>
           {dashboard.sales.map((sale) => (
-            <SaleCard key={sale.id} sale={sale} onConfirm={confirmTransfer} onOpen={setTicket} />
+            <SaleCard
+              key={sale.id}
+              sale={sale}
+              onConfirm={confirmTransfer}
+              onDelete={setDeleteTarget}
+              onEdit={editSale}
+              onOpen={setTicket}
+            />
           ))}
           {!dashboard.sales.length && <Text style={styles.empty}>Todavía no hay ventas hoy.</Text>}
         </View>
@@ -528,7 +622,9 @@ export function AdminMobile() {
 
     return (
       <View style={styles.section}>
-        <Text style={styles.pageTitle}>Nueva venta</Text>
+        <Text style={styles.pageTitle}>
+          {editingSale ? `Corregir ticket #${editingSale.number}` : 'Nueva venta'}
+        </Text>
         <Text style={styles.sectionTitle}>Productos</Text>
         {products.map((product) => (
           <View key={product.id} style={styles.productCard}>
@@ -659,16 +755,32 @@ export function AdminMobile() {
               style={[styles.input, styles.noteInput]}
               value={note}
             />
+            {editingSale ? (
+              <TextInput
+                maxLength={300}
+                multiline
+                onChangeText={setCorrectionReason}
+                placeholder="Motivo de la corrección"
+                placeholderTextColor="#8b7868"
+                style={[styles.input, styles.noteInput]}
+                value={correctionReason}
+              />
+            ) : null}
             {payment === 'Transferencia' && (
               <Text style={styles.pendingCopy}>
                 La venta quedará en espera hasta confirmar el depósito.
               </Text>
             )}
             <ActionButton
-              label={busy ? 'Guardando…' : 'Cobrar y generar ticket'}
+              label={
+                busy ? 'Guardando…' : editingSale ? 'Guardar corrección' : 'Cobrar y generar ticket'
+              }
               disabled={busy}
               onPress={completeSale}
             />
+            {editingSale ? (
+              <ActionButton label="Cancelar corrección" tone="light" onPress={clearCheckout} />
+            ) : null}
           </View>
         )}
       </View>
@@ -780,7 +892,60 @@ export function AdminMobile() {
             {ticket && (
               <ActionButton label="Compartir ticket" onPress={() => shareTicket(ticket)} />
             )}
+            {ticket ? (
+              <ActionButton label="Editar ticket" tone="light" onPress={() => editSale(ticket)} />
+            ) : null}
+            {ticket ? (
+              <ActionButton
+                label="Eliminar ticket"
+                tone="danger"
+                onPress={() => {
+                  setDeleteTarget(ticket);
+                  setTicket(null);
+                }}
+              />
+            ) : null}
             <ActionButton label="Cerrar" tone="light" onPress={() => setTicket(null)} />
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={Boolean(deleteTarget)}
+        onRequestClose={() => setDeleteTarget(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.ticket}>
+            <Text style={styles.eyebrow}>CORRECCIÓN DE CAJA</Text>
+            <Text style={styles.ticketTitle}>Eliminar ticket #{deleteTarget?.number}</Text>
+            <Text style={styles.muted}>
+              Se corregirán el total del día y el inventario. Escribe el motivo para continuar.
+            </Text>
+            <TextInput
+              autoFocus
+              maxLength={300}
+              multiline
+              onChangeText={setDeleteReason}
+              placeholder="Ej. ticket duplicado"
+              placeholderTextColor="#8b7868"
+              style={[styles.input, styles.noteInput]}
+              value={deleteReason}
+            />
+            <ActionButton
+              label={busy ? 'Eliminando…' : 'Eliminar ticket'}
+              tone="danger"
+              disabled={busy}
+              onPress={deleteSale}
+            />
+            <ActionButton
+              label="Cancelar"
+              tone="light"
+              onPress={() => {
+                setDeleteTarget(null);
+                setDeleteReason('');
+              }}
+            />
           </View>
         </View>
       </Modal>

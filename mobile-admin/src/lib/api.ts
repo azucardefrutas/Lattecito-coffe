@@ -47,6 +47,9 @@ export type Sale = {
   paymentStatus: 'Pagado' | 'Pendiente';
   received: number;
   change: number;
+  lastEditedAt: string;
+  lastEditedBy: string;
+  correctionReason: string;
 };
 export type InventoryItem = {
   id: string;

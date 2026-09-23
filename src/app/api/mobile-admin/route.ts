@@ -4,13 +4,19 @@ import { mobileUser } from '@/lib/mobile-auth';
 import {
   adjustInventoryStock,
   confirmMobileTransfer,
+  correctMobileSale,
   createMobileSale,
+  deleteMobileSale,
   readMobileDashboard,
   saveInventoryItem,
   saveInventoryRecipe,
   updateProductCosts,
 } from '@/lib/supabase-store';
-import { inventoryItemInputSchema, inventoryRecipeInputSchema, stockQuantitySchema } from '@/lib/inventory-schema';
+import {
+  inventoryItemInputSchema,
+  inventoryRecipeInputSchema,
+  stockQuantitySchema,
+} from '@/lib/inventory-schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +43,31 @@ const command = z.discriminatedUnion('action', [
     received: cents,
   }),
   z.object({ action: z.literal('confirm-transfer'), saleId: z.uuid() }),
+  z.object({
+    action: z.literal('edit-sale'),
+    saleId: z.uuid(),
+    reason: z.string().trim().min(5).max(300),
+    customer: z.string().trim().max(100),
+    note: z.string().trim().max(500),
+    lines: z
+      .array(
+        z.object({
+          productId: z.string().min(1).max(80),
+          size: z.number().int().min(0).max(2),
+          quantity: z.number().int().min(1).max(99),
+          modifierIds: z.array(z.string().min(1).max(80)).max(20).optional(),
+        }),
+      )
+      .min(1)
+      .max(100),
+    payment: z.enum(['Efectivo', 'Transferencia']),
+    received: cents,
+  }),
+  z.object({
+    action: z.literal('delete-sale'),
+    saleId: z.uuid(),
+    reason: z.string().trim().min(5).max(300),
+  }),
   z.object({ action: z.literal('inventory-item'), item: inventoryItemInputSchema }),
   z.object({
     action: z.literal('inventory-adjust'),
@@ -84,6 +115,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await createMobileSale({ ...input, user }), { status: 201 });
     if (input.action === 'confirm-transfer')
       return NextResponse.json(await confirmMobileTransfer(input.saleId, user));
+    if (input.action === 'edit-sale')
+      return NextResponse.json(await correctMobileSale({ ...input, user }));
+    if (input.action === 'delete-sale')
+      return NextResponse.json(await deleteMobileSale(input.saleId, input.reason, user));
     if (input.action === 'inventory-item')
       return NextResponse.json(await saveInventoryItem(input.item));
     if (input.action === 'inventory-adjust')
