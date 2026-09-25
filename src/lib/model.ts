@@ -19,7 +19,7 @@ export type MenuModifier = Omit<Modifier, 'recipe'>;
 export type Product = {
   id: string;
   name: string;
-  kind?: 'drink' | 'snack';
+  kind?: 'drink' | 'snack' | 'merch';
   category: string;
   description: string;
   prices: number[];
@@ -176,6 +176,7 @@ export function availableModifiers(
   return modifiers.filter(
     (m) =>
       m.active !== false &&
+      kind !== 'merch' &&
       (m.productIds?.includes(productId) || (!m.productIds && kind !== 'snack')),
   );
 }
@@ -219,15 +220,15 @@ export function calculate(
       line.quantity > 99
     )
       throw new Error('Producto o cantidad inválidos.');
-    if (p.kind === 'snack' && line.size !== 0)
-      throw new Error('Los snacks se registran por pieza.');
+    if ((p.kind === 'snack' || p.kind === 'merch') && line.size !== 0)
+      throw new Error('Los snacks y la mercancía se registran por pieza.');
     const extras = resolveModifiers(line, modifiers, p.kind);
     return {
       productId: p.id,
       productName: p.name,
       sizeIndex: line.size,
       name: p.name,
-      size: p.kind === 'snack' ? 'Pieza' : sizes[line.size],
+      size: p.kind === 'snack' || p.kind === 'merch' ? 'Pieza' : sizes[line.size],
       quantity: line.quantity,
       baseUnitPrice: p.prices[line.size],
       extras: extras.map((extra) => ({

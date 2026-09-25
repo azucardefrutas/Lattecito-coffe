@@ -73,3 +73,20 @@ test('catalog supports snacks and cleanly removes product references', () => {
   assert.deepEqual(removed.modifiers[0].productIds, []);
   assert.doesNotThrow(() => catalogSchema.parse(removed));
 });
+
+test('catalog accepts merchandise with one repeated unit price', () => {
+  const catalog = structuredClone(catalogSchema.parse(snapshot));
+  catalog.products.push({
+    ...catalog.products[0],
+    id: 'llavero-lattecito',
+    name: 'Llavero Lattecito',
+    kind: 'merch',
+    category: 'Merch de Lattecito',
+    description: 'Llavero oficial de Lattecito Coffee.',
+    prices: [8000, 8000, 8000],
+    tone: 'dark',
+  });
+  const saved = catalogSchema.parse(catalog);
+  assert.equal(saved.products.at(-1)?.kind, 'merch');
+  assert.deepEqual(saved.products.at(-1)?.prices, [8000, 8000, 8000]);
+});

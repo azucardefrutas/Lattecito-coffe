@@ -9,6 +9,11 @@ import {
   whatsappText,
   type Store,
 } from '../src/lib/model.ts';
+import {
+  DEFAULT_BUSINESS_HOURS,
+  formatBusinessHours,
+  parseBusinessHours,
+} from '../src/lib/business-hours.ts';
 function fixture(): Store {
   return {
     products: [
@@ -161,3 +166,42 @@ test('snacks sell by piece with one price and reject drink sizes', () => {
   assert.equal(result.total, 10000);
   assert.throws(() => calculate([snack], [{ productId: snack.id, size: 1, quantity: 1 }]));
 });
+
+test('merchandise sells by piece and does not receive beverage extras', () => {
+  const merch = {
+    ...initialProducts[0],
+    id: 'camisa-lattecito',
+    name: 'Camisa Lattecito',
+    kind: 'merch' as const,
+    prices: [25000, 25000, 25000],
+  };
+  const modifiers = [{ id: 'shot', name: 'Shot extra', price: 1000 }];
+  const result = calculate([merch], [{ productId: merch.id, size: 0, quantity: 2 }], 0, modifiers);
+  assert.equal(result.items[0].size, 'Pieza');
+  assert.equal(result.total, 50000);
+  assert.throws(() =>
+    calculate(
+      [merch],
+      [{ productId: merch.id, size: 0, quantity: 1, modifierIds: ['shot'] }],
+      0,
+      modifiers,
+    ),
+  );
+  assert.throws(() => calculate([merch], [{ productId: merch.id, size: 1, quantity: 1 }]));
+});
+
+test('business hours keep separate weekday and weekend schedules', () => {
+  assert.deepEqual(parseBusinessHours(''), {
+    weekdays: '4:00 p. m. a 10:00 p. m.',
+    weekends: '11:00 a. m. a 6:00 p. m.',
+  });
+  assert.equal(
+    formatBusinessHours('5:00 p. m. a 9:00 p. m.', '10:00 a. m. a 4:00 p. m.'),
+    'Lunes a viernes: 5:00 p. m. a 9:00 p. m.\nSábado y domingo: 10:00 a. m. a 4:00 p. m.',
+  );
+  assert.equal(DEFAULT_BUSINESS_HOURS, snapshotHours());
+});
+
+function snapshotHours() {
+  return 'Lunes a viernes: 4:00 p. m. a 10:00 p. m.\nSábado y domingo: 11:00 a. m. a 6:00 p. m.';
+}

@@ -110,7 +110,7 @@ export default function SalesAdmin() {
             ...line,
             key: key(line.productId, line.size),
             name: product.name,
-            sizeLabel: product.kind === 'snack' ? 'Pieza' : sizes[line.size],
+            sizeLabel: product.kind !== 'drink' ? 'Pieza' : sizes[line.size],
             extras: selectedExtras,
             amount: unitPrice * line.quantity,
           },
@@ -483,7 +483,7 @@ export default function SalesAdmin() {
               {products.map((product) => (
                 <article key={product.id}>
                   <strong>{product.name}</strong>
-                  {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
+                  {(product.kind !== 'drink' ? ['Pieza'] : sizes).map((size, index) => (
                     <button key={size} type="button" onClick={() => add(product.id, index)}>
                       <span>{size}</span>
                       <b>{money(product.prices[index])}</b>
@@ -499,8 +499,9 @@ export default function SalesAdmin() {
                 if (!product) return null;
                 const available = modifiers.filter(
                   (modifier) =>
-                    modifier.productIds?.includes(product.id) ||
-                    (!modifier.productIds && product.kind !== 'snack'),
+                    product.kind !== 'merch' &&
+                    (modifier.productIds?.includes(product.id) ||
+                      (!modifier.productIds && product.kind === 'drink')),
                 );
                 return (
                   <article key={key(line.productId, line.size)}>
@@ -508,7 +509,7 @@ export default function SalesAdmin() {
                       <div>
                         <strong>{product.name}</strong>
                         <p>
-                          {product.kind === 'snack' ? 'Pieza' : sizes[line.size]} ·{' '}
+                          {product.kind !== 'drink' ? 'Pieza' : sizes[line.size]} ·{' '}
                           {money(product.prices[line.size])}
                         </p>
                       </div>

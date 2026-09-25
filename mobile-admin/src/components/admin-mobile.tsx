@@ -594,7 +594,7 @@ export function AdminMobile() {
             <View key={product.id} style={styles.card}>
               <Text style={styles.cardTitle}>{product.name}</Text>
               <View style={styles.costRow}>
-                {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
+                {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map((size, index) => (
                   <View key={size} style={styles.costField}>
                     <Text style={styles.smallLabel}>{size}</Text>
                     <TextInput
@@ -640,7 +640,7 @@ export function AdminMobile() {
               <Text numberOfLines={2} style={styles.muted}>
                 {product.description}
               </Text>
-              {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
+              {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map((size, index) => (
                 <View key={size} style={styles.sizeRow}>
                   <Text style={styles.sizeText}>
                     {size} · {money(product.prices[index] ?? 0)}
@@ -664,7 +664,7 @@ export function AdminMobile() {
                 <View style={styles.flex}>
                   <Text style={styles.cardTitle}>{product.name}</Text>
                   <Text style={styles.muted}>
-                    {product.kind === 'snack' ? 'Pieza' : sizes[line.size]} ·{' '}
+                    {product.kind === 'snack' || product.kind === 'merch' ? 'Pieza' : sizes[line.size]} ·{' '}
                     {money(product.prices[line.size])}
                   </Text>
                 </View>
@@ -680,15 +680,17 @@ export function AdminMobile() {
               </View>
               {modifiers.filter(
                 (modifier) =>
-                  modifier.productIds?.includes(product.id) ||
-                  (!modifier.productIds && product.kind !== 'snack'),
+                  product.kind !== 'merch' &&
+                  (modifier.productIds?.includes(product.id) ||
+                    (!modifier.productIds && product.kind !== 'snack')),
               ).length > 0 && (
                 <View style={styles.chips}>
                   {modifiers
                     .filter(
                       (modifier) =>
-                        modifier.productIds?.includes(product.id) ||
-                        (!modifier.productIds && product.kind !== 'snack'),
+                        product.kind !== 'merch' &&
+                        (modifier.productIds?.includes(product.id) ||
+                          (!modifier.productIds && product.kind !== 'snack')),
                     )
                     .map((modifier) => {
                       const selected = line.modifierIds.includes(modifier.id);

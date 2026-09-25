@@ -28,6 +28,7 @@ import {
   type Settings,
 } from '@/lib/model';
 import { addCartLine, inspectCart, lineKey, restoreCart } from '@/lib/cart';
+import { DEFAULT_BUSINESS_HOURS } from '@/lib/business-hours';
 
 export default function Storefront({ menuOnly = false }: { menuOnly?: boolean }) {
   const [products, setProducts] = useState<Product[]>([]),
@@ -330,7 +331,11 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                     style={p.imageUrl ? { backgroundImage: `url(${p.imageUrl})` } : undefined}
                   >
                     <span className="product-number">0{i + 1}</span>
-                    <Coffee size={85} strokeWidth={0.8} />
+                    {p.kind === 'merch' ? (
+                      <ShoppingBag size={85} strokeWidth={0.8} />
+                    ) : (
+                      <Coffee size={85} strokeWidth={0.8} />
+                    )}
                     <span className="product-monogram">lattecito</span>
                     <span className="product-add">
                       <Plus size={20} />
@@ -342,7 +347,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                       <h3>{p.name}</h3>
                     </div>
                     <span>
-                      {p.kind === 'snack' ? 'Precio' : 'Desde'}
+                      {p.kind === 'snack' || p.kind === 'merch' ? 'Precio' : 'Desde'}
                       <br />
                       <strong>{money(p.prices[0])}</strong>
                     </span>
@@ -483,10 +488,17 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
               <MapPin size={19} />
               {settings?.address || 'Escríbenos para conocer nuestra ubicación.'}
             </p>
-            <p>
+            <div className="contact-detail contact-hours">
               <Clock size={19} />
-              {settings?.hours || 'Consulta nuestros horarios por WhatsApp.'}
-            </p>
+              <span>
+                {(settings?.hours.trim() || DEFAULT_BUSINESS_HOURS)
+                  .split(/\r?\n/)
+                  .filter(Boolean)
+                  .map((line) => (
+                    <span key={line}>{line}</span>
+                  ))}
+              </span>
+            </div>
             <div className="contact-links">
               {(settings?.phones ?? ['529841651702', '529831137618']).map((p, i) => (
                 <a
@@ -548,16 +560,22 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                 selected.imageUrl ? { backgroundImage: `url(${selected.imageUrl})` } : undefined
               }
             >
-              <Coffee size={120} strokeWidth={0.7} />
+              {selected.kind === 'merch' ? (
+                <ShoppingBag size={120} strokeWidth={0.7} />
+              ) : (
+                <Coffee size={120} strokeWidth={0.7} />
+              )}
               <span className="product-monogram">lattecito</span>
             </div>
             <div className="product-form">
               <span className="eyebrow">{selected.category}</span>
               <h2>{selected.name}</h2>
               <p>{selected.description}</p>
-              {selected.kind === 'snack' ? (
+              {selected.kind === 'snack' || selected.kind === 'merch' ? (
                 <div className="snack-price">
-                  <span>Precio por pieza</span>
+                  <span>
+                    {selected.kind === 'merch' ? 'Precio por artículo' : 'Precio por pieza'}
+                  </span>
                   <strong>{money(selected.prices[0])}</strong>
                 </div>
               ) : (

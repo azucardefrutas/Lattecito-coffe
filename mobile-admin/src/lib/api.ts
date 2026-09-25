@@ -12,7 +12,7 @@ export type Modifier = {
 export type Product = {
   id: string;
   name: string;
-  kind?: 'drink' | 'snack';
+  kind?: 'drink' | 'snack' | 'merch';
   category: string;
   description: string;
   prices: number[];

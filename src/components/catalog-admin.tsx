@@ -23,20 +23,27 @@ import {
   type CatalogProduct,
   type PublicCatalog,
 } from '@/lib/catalog-schema';
+import { formatBusinessHours, parseBusinessHours } from '@/lib/business-hours';
 import InventoryAdmin from '@/components/inventory-admin';
 import SalesAdmin from '@/components/sales-admin';
 
 type View = 'summary' | 'sales' | 'products' | 'extras' | 'inventory' | 'business' | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
+const isUnitProduct = (kind: CatalogProduct['kind']) => kind === 'snack' || kind === 'merch';
+const productKindLabel = (kind: CatalogProduct['kind'], lowercase = false) => {
+  const label = kind === 'snack' ? 'Snack' : kind === 'merch' ? 'Merch' : 'Bebida';
+  return lowercase ? label.toLowerCase() : label;
+};
 const blankProduct = (kind: CatalogProduct['kind'] = 'drink'): CatalogProduct => ({
   id: crypto.randomUUID(),
   name: '',
   kind,
-  category: kind === 'snack' ? 'Snacks y repostería' : 'Cafés',
+  category:
+    kind === 'snack' ? 'Snacks y repostería' : kind === 'merch' ? 'Merch de Lattecito' : 'Cafés',
   description: '',
   prices: [0, 0, 0],
   active: true,
-  tone: kind === 'snack' ? 'cocoa' : 'coffee',
+  tone: kind === 'snack' ? 'cocoa' : kind === 'merch' ? 'dark' : 'coffee',
 });
 const blankModifier = (): CatalogModifier => ({
   id: crypto.randomUUID(),
@@ -181,13 +188,13 @@ export default function CatalogAdmin() {
           ? catalog.products.map((item) => (item.id === completed.id ? completed : item))
           : [...catalog.products, completed],
       };
-      const productLabel = completed.kind === 'snack' ? 'Snack' : 'Bebida';
+      const productLabel = productKindLabel(completed.kind);
       if (await save(next, `${productLabel} ${exists ? 'actualizado' : 'agregado'} en el menú.`)) {
         setProduct(null);
         setImage(null);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No fue posible guardar la bebida.');
+      setError(cause instanceof Error ? cause.message : 'No fue posible guardar el producto.');
       setBusy(false);
     }
   }
@@ -197,7 +204,7 @@ export default function CatalogAdmin() {
     const current = catalog.products.find((item) => item.id === productId);
     if (!current) return;
     const next = removeCatalogProduct(catalog, productId);
-    if (await save(next, `${current.kind === 'snack' ? 'Snack' : 'Bebida'} eliminado del menú.`)) {
+    if (await save(next, `${productKindLabel(current.kind)} eliminado del menú.`)) {
       setProduct(null);
       setImage(null);
     }
@@ -370,8 +377,9 @@ export default function CatalogAdmin() {
                 <span>PRODUCTOS</span>
                 <strong>{catalog.products.length}</strong>
                 <small>
-                  {catalog.products.filter((item) => item.kind !== 'snack').length} bebidas ·{' '}
-                  {catalog.products.filter((item) => item.kind === 'snack').length} snacks
+                  {catalog.products.filter((item) => item.kind === 'drink').length} bebidas ·{' '}
+                  {catalog.products.filter((item) => item.kind === 'snack').length} snacks ·{' '}
+                  {catalog.products.filter((item) => item.kind === 'merch').length} merch
                 </small>
               </article>
               <article className="metric-card">
@@ -391,8 +399,8 @@ export default function CatalogAdmin() {
               <span className="eyebrow">CONTROL DEL SITIO</span>
               <h2>Todo lo que publiques aparece en el menú</h2>
               <p>
-                Edita bebidas, precios, fotografías, extras, teléfonos, dirección y horarios. Puedes
-                ocultar un producto sin borrar su información.
+                Edita bebidas, snacks, merch, precios, fotografías, extras, teléfonos, dirección y
+                horarios. Puedes ocultar un producto sin borrar su información.
               </p>
               <button className="button" onClick={() => setView('products')}>
                 Administrar menú
@@ -407,7 +415,7 @@ export default function CatalogAdmin() {
           <section className="panel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">BEBIDAS Y SNACKS</span>
+                <span className="eyebrow">BEBIDAS, SNACKS Y MERCH</span>
                 <h2>Productos del menú</h2>
               </div>
               <div className="inline-fields">
@@ -429,6 +437,15 @@ export default function CatalogAdmin() {
                 >
                   <Plus size={17} /> Nuevo snack
                 </button>
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setProduct(blankProduct('merch'));
+                    setImage(null);
+                  }}
+                >
+                  <Plus size={17} /> Agregar merch
+                </button>
               </div>
             </div>
             <div className="catalog-product-grid">
@@ -442,7 +459,11 @@ export default function CatalogAdmin() {
                     <span className="eyebrow">{item.category}</span>
                     <h3>{item.name}</h3>
                     <p>{item.description}</p>
-                    <strong>{item.prices.map(money).join(' · ')}</strong>
+                    <strong>
+                      {isUnitProduct(item.kind)
+                        ? `${money(item.prices[0])} por pieza`
+                        : item.prices.map(money).join(' · ')}
+                    </strong>
                     <small>{item.active ? 'Visible en el menú' : 'Oculta'}</small>
                     <button
                       className="small-button"
@@ -451,7 +472,7 @@ export default function CatalogAdmin() {
                         setImage(null);
                       }}
                     >
-                      Editar {item.kind === 'snack' ? 'snack' : 'bebida'}
+                      Editar {productKindLabel(item.kind, true)}
                     </button>
                   </div>
                 </article>
@@ -627,6 +648,9 @@ function ProductEditor({
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isSnack = product.kind === 'snack';
+  const isMerch = product.kind === 'merch';
+  const unitProduct = isSnack || isMerch;
+  const kindLabel = productKindLabel(product.kind, true);
   const preview = useMemo(
     () => (image ? URL.createObjectURL(image) : product.imageUrl),
     [image, product.imageUrl],
@@ -645,8 +669,12 @@ function ProductEditor({
       >
         <div className="section-heading">
           <div>
-            <span className="eyebrow">EDITOR DE {isSnack ? 'SNACK' : 'BEBIDA'}</span>
-            <h2>{product.name || (isSnack ? 'Nuevo snack' : 'Nueva bebida')}</h2>
+            <span className="eyebrow">
+              EDITOR DE {isMerch ? 'MERCH' : isSnack ? 'SNACK' : 'BEBIDA'}
+            </span>
+            <h2>
+              {product.name || (isMerch ? 'Nueva merch' : isSnack ? 'Nuevo snack' : 'Nueva bebida')}
+            </h2>
           </div>
           <button type="button" className="small-button" onClick={onCancel}>
             Cerrar
@@ -689,13 +717,17 @@ function ProductEditor({
                   ...product,
                   kind,
                   category:
-                    product.category === 'Cafés' || product.category === 'Snacks y repostería'
+                    product.category === 'Cafés' ||
+                    product.category === 'Snacks y repostería' ||
+                    product.category === 'Merch de Lattecito'
                       ? kind === 'snack'
                         ? 'Snacks y repostería'
-                        : 'Cafés'
+                        : kind === 'merch'
+                          ? 'Merch de Lattecito'
+                          : 'Cafés'
                       : product.category,
                   prices:
-                    kind === 'snack'
+                    kind === 'snack' || kind === 'merch'
                       ? [product.prices[0], product.prices[0], product.prices[0]]
                       : product.prices,
                 });
@@ -703,6 +735,7 @@ function ProductEditor({
             >
               <option value="drink">Bebida</option>
               <option value="snack">Snack o repostería</option>
+              <option value="merch">Merch</option>
             </select>
           </label>
           <label className="field">
@@ -737,8 +770,8 @@ function ProductEditor({
           />
         </label>
         <fieldset>
-          <legend>{isSnack ? 'Precio por pieza' : 'Precios por tamaño'}</legend>
-          {isSnack ? (
+          <legend>{unitProduct ? 'Precio por pieza' : 'Precios por tamaño'}</legend>
+          {unitProduct ? (
             <label className="field">
               Precio
               <input
@@ -802,7 +835,7 @@ function ProductEditor({
         </div>
         <div className="inline-fields">
           <button className="button" disabled={busy}>
-            <Save size={17} /> {busy ? 'Guardando…' : `Guardar ${isSnack ? 'snack' : 'bebida'}`}
+            <Save size={17} /> {busy ? 'Guardando…' : `Guardar ${kindLabel}`}
           </button>
           <button type="button" className="small-button" disabled={busy} onClick={onCancel}>
             Cancelar
@@ -814,10 +847,17 @@ function ProductEditor({
               <>
                 <div>
                   <strong>¿Eliminar “{product.name}”?</strong>
-                  <p>Desaparecerá del menú público y de la caja. Esta acción no se puede deshacer.</p>
+                  <p>
+                    Desaparecerá del menú público y de la caja. Esta acción no se puede deshacer.
+                  </p>
                 </div>
                 <div className="inline-fields">
-                  <button type="button" className="danger-button" disabled={busy} onClick={onDelete}>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    disabled={busy}
+                    onClick={onDelete}
+                  >
                     <Trash2 size={16} /> Sí, eliminar producto
                   </button>
                   <button
@@ -837,7 +877,7 @@ function ProductEditor({
                 disabled={busy}
                 onClick={() => setConfirmingDelete(true)}
               >
-                <Trash2 size={15} /> Eliminar {isSnack ? 'snack' : 'bebida'}
+                <Trash2 size={15} /> Eliminar {kindLabel}
               </button>
             )}
           </div>
@@ -928,23 +968,25 @@ function ModifierEditor({
           <fieldset>
             <legend>Bebidas compatibles</legend>
             <div className="check-grid">
-              {products.map((item) => (
-                <label className="check-field" key={item.id}>
-                  <input
-                    type="checkbox"
-                    checked={modifier.productIds?.includes(item.id) ?? false}
-                    onChange={(event) =>
-                      onChange({
-                        ...modifier,
-                        productIds: event.target.checked
-                          ? [...(modifier.productIds ?? []), item.id]
-                          : (modifier.productIds ?? []).filter((id) => id !== item.id),
-                      })
-                    }
-                  />{' '}
-                  {item.name}
-                </label>
-              ))}
+              {products
+                .filter((item) => item.kind !== 'merch')
+                .map((item) => (
+                  <label className="check-field" key={item.id}>
+                    <input
+                      type="checkbox"
+                      checked={modifier.productIds?.includes(item.id) ?? false}
+                      onChange={(event) =>
+                        onChange({
+                          ...modifier,
+                          productIds: event.target.checked
+                            ? [...(modifier.productIds ?? []), item.id]
+                            : (modifier.productIds ?? []).filter((id) => id !== item.id),
+                        })
+                      }
+                    />{' '}
+                    {item.name}
+                  </label>
+                ))}
             </div>
           </fieldset>
         )}
@@ -971,12 +1013,16 @@ function BusinessForm({
   onSave: (settings: PublicCatalog['settings']) => Promise<boolean>;
 }) {
   const [settings, setSettings] = useState(catalog.settings);
+  const businessHours = parseBusinessHours(settings.hours);
   return (
     <form
       className="panel"
       onSubmit={(event) => {
         event.preventDefault();
-        void onSave(settings);
+        void onSave({
+          ...settings,
+          hours: formatBusinessHours(businessHours.weekdays, businessHours.weekends),
+        });
       }}
     >
       <span className="eyebrow">INFORMACIÓN PÚBLICA</span>
@@ -1020,14 +1066,40 @@ function BusinessForm({
           onChange={(event) => setSettings({ ...settings, address: event.target.value })}
         />
       </label>
-      <label className="field">
-        Horarios
-        <textarea
-          maxLength={300}
-          value={settings.hours}
-          onChange={(event) => setSettings({ ...settings, hours: event.target.value })}
-        />
-      </label>
+      <fieldset className="business-hours-fields">
+        <legend>Horario visible en la página web</legend>
+        <div className="form-grid">
+          <label className="field">
+            Lunes a viernes
+            <input
+              required
+              maxLength={100}
+              value={businessHours.weekdays}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  hours: formatBusinessHours(event.target.value, businessHours.weekends),
+                })
+              }
+            />
+          </label>
+          <label className="field">
+            Sábado y domingo
+            <input
+              required
+              maxLength={100}
+              value={businessHours.weekends}
+              onChange={(event) =>
+                setSettings({
+                  ...settings,
+                  hours: formatBusinessHours(businessHours.weekdays, event.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+        <small>Estos dos horarios se publican en la sección de contacto del sitio.</small>
+      </fieldset>
       <label className="check-field">
         <input
           type="checkbox"

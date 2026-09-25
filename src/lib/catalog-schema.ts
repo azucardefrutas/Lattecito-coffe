@@ -12,7 +12,7 @@ export const catalogProductSchema = z.object({
     .trim()
     .regex(/^[a-z0-9-]{1,80}$/),
   name: z.string().trim().min(2).max(100),
-  kind: z.enum(['drink', 'snack']).default('drink'),
+  kind: z.enum(['drink', 'snack', 'merch']).default('drink'),
   category: z.string().trim().min(2).max(60),
   description: z.string().trim().min(5).max(500),
   prices: z.array(cents).length(3),
@@ -59,7 +59,7 @@ export const catalogSchema = z
       if (modifier.productIds?.some((id) => !productIds.has(id)))
         context.addIssue({
           code: 'custom',
-          message: `El extra ${modifier.name} apunta a una bebida inexistente.`,
+          message: `El extra ${modifier.name} apunta a un producto inexistente.`,
         });
   });
 
