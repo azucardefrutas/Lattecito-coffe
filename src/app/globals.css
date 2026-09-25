@@ -3048,6 +3048,7 @@ tr:hover td {
   }
   .sales-register-panel {
     padding-bottom: 92px;
+    backdrop-filter: none;
   }
   .sales-workspace {
     display: block;
