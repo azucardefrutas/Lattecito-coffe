@@ -2950,9 +2950,38 @@ tr:hover td {
   gap: 10px;
   margin-top: 18px;
 }
-.sales-ticket-list article > p {
-  margin: 7px 0;
+.sales-ticket-card {
+  min-width: 0;
+}
+.ticket-items {
+  margin: 12px 0 14px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 18px;
+  border-radius: 13px;
+  background: rgba(255, 250, 243, 0.7);
+}
+.ticket-items p {
+  min-width: 0;
+  margin: 0;
   color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.ticket-items b {
+  color: var(--ink);
+}
+.ticket-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+.ticket-actions > button {
+  width: 100%;
+  min-height: 42px;
+  justify-content: center;
 }
 .retention-note {
   margin: 18px 0 0;
@@ -3013,6 +3042,24 @@ tr:hover td {
 }
 .correction-dialog textarea {
   min-height: 100px;
+}
+.delete-reason-help {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.delete-ticket-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, auto);
+  gap: 10px;
+}
+.delete-ticket-actions > button {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
 }
 
 @media (max-width: 900px) {
@@ -3108,6 +3155,13 @@ tr:hover td {
   .daily-lines > div {
     align-items: flex-start;
   }
+  .ticket-card-header {
+    display: flex;
+    align-items: flex-start;
+  }
+  .ticket-items {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
@@ -3147,8 +3201,16 @@ tr:hover td {
     display: flex;
     align-items: center;
   }
-  .sales-ticket-list .inline-fields {
-    grid-template-columns: 1fr;
+  .sales-ticket-list .ticket-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ticket-actions > button:first-child,
+  .ticket-actions > button:last-child:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .ticket-items {
+    margin-inline: -2px;
+    padding: 11px 12px;
   }
   .daily-total {
     padding: 14px;
@@ -3160,6 +3222,33 @@ tr:hover td {
     max-height: 94vh;
     padding: 24px 18px;
     border-radius: 20px 20px 0 0;
+  }
+  .delete-ticket-overlay {
+    align-items: end;
+    padding: 0;
+  }
+  .delete-ticket-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 10px);
+    padding: 24px 18px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+  }
+  .delete-ticket-dialog h2 {
+    margin-top: 7px;
+    font-size: clamp(25px, 9vw, 34px);
+  }
+  .delete-ticket-dialog textarea {
+    min-height: 116px;
+    font-size: 16px;
+  }
+  .delete-ticket-actions {
+    grid-template-columns: 1fr;
+  }
+  .delete-ticket-actions .danger-button {
+    order: 2;
+  }
+  .delete-ticket-actions .small-button {
+    order: 1;
   }
 }
 

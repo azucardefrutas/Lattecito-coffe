@@ -655,8 +655,8 @@ export default function SalesAdmin() {
         </p>
         <div className="sales-ticket-list">
           {data.sales.map((sale) => (
-            <article key={sale.id}>
-              <div className="section-heading compact">
+            <article className="sales-ticket-card" key={sale.id}>
+              <div className="section-heading compact ticket-card-header">
                 <div>
                   <strong>Ticket #{sale.number}</strong>
                   <p>
@@ -669,25 +669,34 @@ export default function SalesAdmin() {
                 </div>
                 <b>{money(sale.total)}</b>
               </div>
-              {sale.items.map((item, index) => (
-                <p key={index}>
-                  {item.quantity} × {displaySaleItem(item)}
-                </p>
-              ))}
-              <div className="inline-fields">
-                <button className="small-button" onClick={() => setReceipt(sale)}>
+              <div className="ticket-items">
+                {sale.items.map((item, index) => (
+                  <p key={index}>
+                    <b>{item.quantity} ×</b> {displaySaleItem(item)}
+                  </p>
+                ))}
+              </div>
+              <div className="inline-fields ticket-actions">
+                <button className="small-button" onClick={() => setReceipt(sale)} type="button">
                   Ver comprobante
                 </button>
-                <button className="small-button" disabled={busy} onClick={() => editSale(sale)}>
+                <button
+                  className="small-button"
+                  disabled={busy}
+                  onClick={() => editSale(sale)}
+                  type="button"
+                >
                   <Pencil size={15} /> Editar
                 </button>
                 <button
+                  aria-label={`Eliminar ticket ${sale.number}`}
                   className="danger-button compact-danger"
                   disabled={busy}
                   onClick={() => {
                     setDeleteTarget(sale);
                     setDeleteReason('');
                   }}
+                  type="button"
                 >
                   <Trash2 size={15} /> Eliminar
                 </button>
@@ -696,6 +705,7 @@ export default function SalesAdmin() {
                     className="small-button"
                     disabled={busy}
                     onClick={() => void confirmTransfer(sale.id)}
+                    type="button"
                   >
                     Confirmar transferencia
                   </button>
@@ -781,10 +791,15 @@ export default function SalesAdmin() {
       )}
 
       {deleteTarget && (
-        <div className="catalog-overlay receipt-overlay">
-          <article className="receipt digital-receipt correction-dialog">
+        <div className="catalog-overlay receipt-overlay delete-ticket-overlay">
+          <article
+            aria-labelledby="delete-ticket-title"
+            aria-modal="true"
+            className="receipt digital-receipt correction-dialog delete-ticket-dialog"
+            role="dialog"
+          >
             <span className="eyebrow">CORRECCIÓN DE CAJA</span>
-            <h2>Eliminar ticket #{deleteTarget.number}</h2>
+            <h2 id="delete-ticket-title">Eliminar ticket #{deleteTarget.number}</h2>
             <p>
               Se restará del total del día y se repondrán automáticamente los insumos que consumió.
             </p>
@@ -799,8 +814,17 @@ export default function SalesAdmin() {
                 placeholder="Ej. ticket duplicado"
               />
             </label>
-            <div className="inline-fields receipt-actions">
-              <button className="danger-button" disabled={busy} onClick={() => void deleteSale()}>
+            <div className="delete-reason-help">
+              <span>Mínimo 5 caracteres</span>
+              <span>{deleteReason.trim().length}/300</span>
+            </div>
+            <div className="inline-fields receipt-actions delete-ticket-actions">
+              <button
+                className="danger-button"
+                disabled={busy || deleteReason.trim().length < 5}
+                onClick={() => void deleteSale()}
+                type="button"
+              >
                 <Trash2 size={16} /> {busy ? 'Eliminando…' : 'Eliminar ticket'}
               </button>
               <button
@@ -810,6 +834,7 @@ export default function SalesAdmin() {
                   setDeleteTarget(null);
                   setDeleteReason('');
                 }}
+                type="button"
               >
                 Cancelar
               </button>
