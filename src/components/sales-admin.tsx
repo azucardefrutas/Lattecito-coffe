@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ChevronDown,
   Minus,
   Pencil,
   Plus,
@@ -63,6 +64,7 @@ export default function SalesAdmin() {
   const [correctionReason, setCorrectionReason] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
+  const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -91,17 +93,39 @@ export default function SalesAdmin() {
   const products = data?.catalog.products.filter((product) => product.active) ?? [];
   const modifiers = data?.catalog.modifiers.filter((modifier) => modifier.active !== false) ?? [];
   const lines = Object.values(cart);
-  const total = useMemo(
+  const orderLines = useMemo(
     () =>
-      lines.reduce((sum, line) => {
+      lines.flatMap((line) => {
         const product = products.find((candidate) => candidate.id === line.productId);
-        const extras = line.modifierIds.reduce(
-          (extraSum, id) => extraSum + (modifiers.find((extra) => extra.id === id)?.price ?? 0),
-          0,
-        );
-        return sum + ((product?.prices[line.size] ?? 0) + extras) * line.quantity;
-      }, 0),
+        if (!product) return [];
+        const selectedExtras = line.modifierIds.flatMap((id) => {
+          const extra = modifiers.find((candidate) => candidate.id === id);
+          return extra ? [extra] : [];
+        });
+        const unitPrice =
+          (product.prices[line.size] ?? 0) +
+          selectedExtras.reduce((sum, extra) => sum + extra.price, 0);
+        return [
+          {
+            ...line,
+            key: key(line.productId, line.size),
+            name: product.name,
+            sizeLabel: product.kind === 'snack' ? 'Pieza' : sizes[line.size],
+            extras: selectedExtras,
+            amount: unitPrice * line.quantity,
+          },
+        ];
+      }),
     [lines, modifiers, products],
+  );
+  const total = useMemo(() => orderLines.reduce((sum, line) => sum + line.amount, 0), [orderLines]);
+  const unitCount = useMemo(
+    () => orderLines.reduce((sum, line) => sum + line.quantity, 0),
+    [orderLines],
+  );
+  const dailyUnitCount = useMemo(
+    () => data?.daily.products.reduce((sum, product) => sum + product.quantity, 0) ?? 0,
+    [data?.daily.products],
   );
 
   function key(productId: string, size: number) {
@@ -116,6 +140,7 @@ export default function SalesAdmin() {
         ? { ...current[id], quantity: current[id].quantity + 1 }
         : { productId, size, quantity: 1, modifierIds: [] },
     }));
+    setOrderSummaryOpen(false);
   }
 
   function quantity(line: CartLine, delta: number) {
@@ -160,6 +185,7 @@ export default function SalesAdmin() {
     setNote('');
     setEditingSale(null);
     setCorrectionReason('');
+    setOrderSummaryOpen(false);
   }
 
   function editSale(sale: Sale) {
@@ -388,7 +414,7 @@ export default function SalesAdmin() {
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel sales-register-panel">
         <div className="section-heading">
           <div>
             <span className="eyebrow">CAJA</span>
@@ -398,155 +424,235 @@ export default function SalesAdmin() {
           </div>
           <ShoppingCart size={26} />
         </div>
-        <div className="sales-product-grid">
-          {products.map((product) => (
-            <article key={product.id}>
-              <strong>{product.name}</strong>
-              {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
-                <button key={size} type="button" onClick={() => add(product.id, index)}>
-                  <span>{size}</span>
-                  <b>{money(product.prices[index])}</b>
-                  <Plus size={15} />
-                </button>
-              ))}
-            </article>
-          ))}
-        </div>
-        <div className="sales-cart">
-          {lines.map((line) => {
-            const product = products.find((candidate) => candidate.id === line.productId)!;
-            const available = modifiers.filter(
-              (modifier) =>
-                modifier.productIds?.includes(product.id) ||
-                (!modifier.productIds && product.kind !== 'snack'),
-            );
-            return (
-              <article key={key(line.productId, line.size)}>
-                <div className="section-heading compact">
-                  <div>
-                    <strong>{product.name}</strong>
-                    <p>
-                      {product.kind === 'snack' ? 'Pieza' : sizes[line.size]} ·{' '}
-                      {money(product.prices[line.size])}
-                    </p>
-                  </div>
-                  <div className="sales-quantity">
-                    <button onClick={() => quantity(line, -1)}>
-                      <Minus size={14} />
-                    </button>
-                    <b>{line.quantity}</b>
-                    <button onClick={() => quantity(line, 1)}>
-                      <Plus size={14} />
-                    </button>
-                  </div>
+        <div className="sales-workspace">
+          {lines.length > 0 && (
+            <aside
+              aria-label="Resumen de la venta en curso"
+              className={`sales-order-summary${orderSummaryOpen ? ' open' : ''}`}
+            >
+              <button
+                aria-expanded={orderSummaryOpen}
+                className="sales-order-summary-toggle"
+                onClick={() => setOrderSummaryOpen((current) => !current)}
+                type="button"
+              >
+                <span>
+                  <ShoppingCart size={18} />
+                  <span>
+                    <b>Esta venta</b>
+                    <small>
+                      {unitCount} {unitCount === 1 ? 'unidad' : 'unidades'}
+                    </small>
+                  </span>
+                </span>
+                <strong>{money(total)}</strong>
+                <ChevronDown aria-hidden="true" size={18} />
+              </button>
+              <div className="sales-order-summary-body">
+                <div className="sales-order-lines">
+                  {orderLines.map((line) => (
+                    <div key={line.key}>
+                      <span>
+                        <b>{line.quantity} ×</b> {line.name} · {line.sizeLabel}
+                        {line.extras.length > 0 && (
+                          <small>+ {line.extras.map((extra) => extra.name).join(', ')}</small>
+                        )}
+                      </span>
+                      <strong>{money(line.amount)}</strong>
+                    </div>
+                  ))}
                 </div>
-                {available.length > 0 && (
-                  <div className="sales-extra-chips">
-                    {available.map((extra) => (
-                      <button
-                        className={line.modifierIds.includes(extra.id) ? 'selected' : ''}
-                        key={extra.id}
-                        onClick={() => toggleExtra(line, extra.id)}
-                      >
-                        {extra.name} +{money(extra.price)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </article>
-            );
-          })}
-          {!lines.length && <p className="muted">Pulsa un tamaño para agregarlo a la cuenta.</p>}
-        </div>
-        {lines.length > 0 && (
-          <div className="sales-checkout">
-            <div className="daily-total">
-              <span>TOTAL</span>
-              <strong>{money(total)}</strong>
+                <div className="sales-order-total">
+                  <span>Total de esta venta</span>
+                  <strong>{money(total)}</strong>
+                </div>
+                <div className="sales-day-glance">
+                  <span>REGISTRO COBRADO HOY</span>
+                  <strong>{money(data.daily.total)}</strong>
+                  <small>
+                    {dailyUnitCount} {dailyUnitCount === 1 ? 'unidad' : 'unidades'} ·{' '}
+                    {data.daily.tickets} {data.daily.tickets === 1 ? 'ticket' : 'tickets'}
+                  </small>
+                </div>
+              </div>
+            </aside>
+          )}
+
+          <div className="sales-workspace-main">
+            <div className="sales-product-grid">
+              {products.map((product) => (
+                <article key={product.id}>
+                  <strong>{product.name}</strong>
+                  {(product.kind === 'snack' ? ['Pieza'] : sizes).map((size, index) => (
+                    <button key={size} type="button" onClick={() => add(product.id, index)}>
+                      <span>{size}</span>
+                      <b>{money(product.prices[index])}</b>
+                      <Plus size={15} />
+                    </button>
+                  ))}
+                </article>
+              ))}
             </div>
-            <div className="inline-fields">
-              <button
-                className={payment === 'Efectivo' ? 'small-button active-choice' : 'small-button'}
-                onClick={() => setPayment('Efectivo')}
-              >
-                Efectivo
-              </button>
-              <button
-                className={
-                  payment === 'Transferencia' ? 'small-button active-choice' : 'small-button'
-                }
-                onClick={() => setPayment('Transferencia')}
-              >
-                Transferencia
-              </button>
+            <div className="sales-cart">
+              {lines.map((line) => {
+                const product = products.find((candidate) => candidate.id === line.productId);
+                if (!product) return null;
+                const available = modifiers.filter(
+                  (modifier) =>
+                    modifier.productIds?.includes(product.id) ||
+                    (!modifier.productIds && product.kind !== 'snack'),
+                );
+                return (
+                  <article key={key(line.productId, line.size)}>
+                    <div className="section-heading compact">
+                      <div>
+                        <strong>{product.name}</strong>
+                        <p>
+                          {product.kind === 'snack' ? 'Pieza' : sizes[line.size]} ·{' '}
+                          {money(product.prices[line.size])}
+                        </p>
+                      </div>
+                      <div className="sales-quantity">
+                        <button
+                          aria-label={`Quitar una unidad de ${product.name}`}
+                          onClick={() => quantity(line, -1)}
+                          type="button"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <b aria-label={`${line.quantity} unidades`}>{line.quantity}</b>
+                        <button
+                          aria-label={`Agregar una unidad de ${product.name}`}
+                          onClick={() => quantity(line, 1)}
+                          type="button"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    {available.length > 0 && (
+                      <div className="sales-extra-chips">
+                        {available.map((extra) => (
+                          <button
+                            aria-pressed={line.modifierIds.includes(extra.id)}
+                            className={line.modifierIds.includes(extra.id) ? 'selected' : ''}
+                            key={extra.id}
+                            onClick={() => toggleExtra(line, extra.id)}
+                            type="button"
+                          >
+                            {extra.name} +{money(extra.price)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+              {!lines.length && (
+                <div className="sales-empty-cart">
+                  <ShoppingCart aria-hidden="true" size={22} />
+                  <p>Elige una presentación. Aquí aparecerán sus cantidades y extras.</p>
+                </div>
+              )}
             </div>
-            <div className="form-grid">
-              {payment === 'Efectivo' && (
+            {lines.length > 0 && (
+              <div className="sales-checkout" id="sales-checkout">
+                <div className="daily-total">
+                  <span>TOTAL DE ESTA VENTA</span>
+                  <strong>{money(total)}</strong>
+                </div>
+                <div className="inline-fields">
+                  <button
+                    className={
+                      payment === 'Efectivo' ? 'small-button active-choice' : 'small-button'
+                    }
+                    onClick={() => setPayment('Efectivo')}
+                  >
+                    Efectivo
+                  </button>
+                  <button
+                    className={
+                      payment === 'Transferencia' ? 'small-button active-choice' : 'small-button'
+                    }
+                    onClick={() => setPayment('Transferencia')}
+                  >
+                    Transferencia
+                  </button>
+                </div>
+                <div className="form-grid">
+                  {payment === 'Efectivo' && (
+                    <label className="field">
+                      Efectivo recibido
+                      <input
+                        type="number"
+                        min={total / 100}
+                        step="0.01"
+                        value={received}
+                        onChange={(event) => setReceived(event.target.value)}
+                      />
+                    </label>
+                  )}
+                  <label className="field">
+                    Cliente (opcional)
+                    <input
+                      maxLength={100}
+                      value={customer}
+                      onChange={(event) => setCustomer(event.target.value)}
+                    />
+                  </label>
+                </div>
                 <label className="field">
-                  Efectivo recibido
-                  <input
-                    type="number"
-                    min={total / 100}
-                    step="0.01"
-                    value={received}
-                    onChange={(event) => setReceived(event.target.value)}
+                  Nota (opcional)
+                  <textarea
+                    maxLength={500}
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
                   />
                 </label>
-              )}
-              <label className="field">
-                Cliente (opcional)
-                <input
-                  maxLength={100}
-                  value={customer}
-                  onChange={(event) => setCustomer(event.target.value)}
-                />
-              </label>
-            </div>
-            <label className="field">
-              Nota (opcional)
-              <textarea
-                maxLength={500}
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-              />
-            </label>
-            {editingSale && (
-              <label className="field">
-                Motivo de la corrección
-                <textarea
-                  maxLength={300}
-                  minLength={5}
-                  required
-                  value={correctionReason}
-                  onChange={(event) => setCorrectionReason(event.target.value)}
-                  placeholder="Ej. se capturó una bebida equivocada"
-                />
-              </label>
-            )}
-            {payment === 'Transferencia' && (
-              <p className="notice">
-                La transferencia quedará en espera y no se sumará como cobrada hasta confirmarla.
-              </p>
-            )}
-            <button className="button" disabled={busy} onClick={() => void completeSale()}>
-              {busy
-                ? 'Guardando…'
-                : editingSale
-                  ? 'Guardar corrección'
-                  : 'Cobrar y generar comprobante'}
-            </button>
-            {editingSale && (
-              <button className="small-button" disabled={busy} onClick={clearCheckout}>
-                Cancelar corrección
-              </button>
+                {editingSale && (
+                  <label className="field">
+                    Motivo de la corrección
+                    <textarea
+                      maxLength={300}
+                      minLength={5}
+                      required
+                      value={correctionReason}
+                      onChange={(event) => setCorrectionReason(event.target.value)}
+                      placeholder="Ej. se capturó una bebida equivocada"
+                    />
+                  </label>
+                )}
+                {payment === 'Transferencia' && (
+                  <p className="notice">
+                    La transferencia quedará en espera y no se sumará como cobrada hasta
+                    confirmarla.
+                  </p>
+                )}
+                <button className="button" disabled={busy} onClick={() => void completeSale()}>
+                  {busy
+                    ? 'Guardando…'
+                    : editingSale
+                      ? 'Guardar corrección'
+                      : 'Cobrar y generar comprobante'}
+                </button>
+                {editingSale && (
+                  <button className="small-button" disabled={busy} onClick={clearCheckout}>
+                    Cancelar corrección
+                  </button>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </section>
 
       <section className="panel">
-        <span className="eyebrow">MOVIMIENTOS DE HOY</span>
-        <h2>Tickets individuales</h2>
+        <span className="eyebrow">COMPROBANTES DEL DÍA</span>
+        <h2>Tickets para revisar o corregir</h2>
+        <p className="ticket-help">
+          El registro acumulado está arriba. Estos comprobantes conservan el detalle de cada cobro
+          para que puedas consultarlo, editarlo o eliminarlo si hubo un error.
+        </p>
         <div className="sales-ticket-list">
           {data.sales.map((sale) => (
             <article key={sale.id}>
