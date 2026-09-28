@@ -10,6 +10,7 @@ import {
   ReceiptText,
   Share2,
   ShoppingCart,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import type { PublicCatalog } from '@/lib/catalog-schema';
@@ -52,7 +53,7 @@ type Dashboard = {
 };
 type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
 
-export default function SalesAdmin() {
+export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => void }) {
   const [data, setData] = useState<Dashboard | null>(null);
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [payment, setPayment] = useState<'Efectivo' | 'Transferencia'>('Efectivo');
@@ -493,6 +494,30 @@ export default function SalesAdmin() {
                 </article>
               ))}
             </div>
+            <section className="sales-extra-catalog" aria-label="Extras disponibles para la venta">
+              <div>
+                <span className="eyebrow">
+                  <Sparkles aria-hidden="true" size={14} /> EXTRAS DISPONIBLES
+                </span>
+                <p>
+                  {modifiers.length
+                    ? 'Agrega una bebida y selecciona debajo los extras que llevará.'
+                    : 'Todavía no hay extras. Puedes crearlos sin salir del área de administración.'}
+                </p>
+              </div>
+              {modifiers.length > 0 && (
+                <div className="sales-extra-catalog-list">
+                  {modifiers.map((extra) => (
+                    <span key={extra.id}>
+                      {extra.name} <b>+{money(extra.price)}</b>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <button className="small-button" onClick={onManageExtras} type="button">
+                <Plus size={15} /> Administrar extras
+              </button>
+            </section>
             <div className="sales-cart">
               {lines.map((line) => {
                 const product = products.find((candidate) => candidate.id === line.productId);
@@ -532,18 +557,21 @@ export default function SalesAdmin() {
                       </div>
                     </div>
                     {available.length > 0 && (
-                      <div className="sales-extra-chips">
-                        {available.map((extra) => (
-                          <button
-                            aria-pressed={line.modifierIds.includes(extra.id)}
-                            className={line.modifierIds.includes(extra.id) ? 'selected' : ''}
-                            key={extra.id}
-                            onClick={() => toggleExtra(line, extra.id)}
-                            type="button"
-                          >
-                            {extra.name} +{money(extra.price)}
-                          </button>
-                        ))}
+                      <div className="sales-line-extra-picker">
+                        <span>EXTRAS PARA {product.name}</span>
+                        <div className="sales-extra-chips">
+                          {available.map((extra) => (
+                            <button
+                              aria-pressed={line.modifierIds.includes(extra.id)}
+                              className={line.modifierIds.includes(extra.id) ? 'selected' : ''}
+                              key={extra.id}
+                              onClick={() => toggleExtra(line, extra.id)}
+                              type="button"
+                            >
+                              {extra.name} +{money(extra.price)}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </article>

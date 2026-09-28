@@ -409,7 +409,7 @@ export default function CatalogAdmin() {
           </>
         )}
 
-        {view === 'sales' && <SalesAdmin />}
+        {view === 'sales' && <SalesAdmin onManageExtras={() => setView('extras')} />}
 
         {view === 'products' && (
           <section className="panel">

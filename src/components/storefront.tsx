@@ -11,6 +11,7 @@ import {
   Minus,
   Plus,
   ShoppingBag,
+  Sparkles,
   X,
   MessageCircle,
   MapPin,
@@ -174,6 +175,9 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
           <Link href="/menu" onClick={() => setNav(false)}>
             Nuestro menú
           </Link>
+          <a href="/#extras" onClick={() => setNav(false)}>
+            Extras
+          </a>
           <a href="/#momento" onClick={() => setNav(false)}>
             El momento Lattecito
           </a>
@@ -363,6 +367,30 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
             ).length === 0 && (
               <p className="notice">No encontramos ese antojo. Prueba otra búsqueda.</p>
             )}
+          <section className="public-extras" id="extras" aria-labelledby="public-extras-title">
+            <div className="public-extras-heading">
+              <div>
+                <span className="eyebrow">HAZLO A TU GUSTO</span>
+                <h3 id="public-extras-title">Extras para tu bebida</h3>
+              </div>
+              <Sparkles aria-hidden="true" size={30} strokeWidth={1.4} />
+            </div>
+            {modifiers.length > 0 ? (
+              <div className="public-extras-grid">
+                {modifiers.map((extra) => (
+                  <article key={extra.id}>
+                    <span>{extra.name}</span>
+                    <strong>+{money(extra.price)}</strong>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="public-extras-empty">
+                Estamos preparando nuevos extras para acompañar tu bebida favorita.
+              </p>
+            )}
+            <small>La disponibilidad puede depender de la bebida elegida.</small>
+          </section>
         </section>
         {!menuOnly && (
           <section className="moment" id="momento">

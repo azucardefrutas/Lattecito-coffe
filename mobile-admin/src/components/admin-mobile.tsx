@@ -684,28 +684,31 @@ export function AdminMobile() {
                   (modifier.productIds?.includes(product.id) ||
                     (!modifier.productIds && product.kind !== 'snack')),
               ).length > 0 && (
-                <View style={styles.chips}>
-                  {modifiers
-                    .filter(
-                      (modifier) =>
-                        product.kind !== 'merch' &&
-                        (modifier.productIds?.includes(product.id) ||
-                          (!modifier.productIds && product.kind !== 'snack')),
-                    )
-                    .map((modifier) => {
-                      const selected = line.modifierIds.includes(modifier.id);
-                      return (
-                        <Pressable
-                          key={modifier.id}
-                          onPress={() => toggleModifier(line, modifier.id)}
-                          style={[styles.chip, selected && styles.chipSelected]}
-                        >
-                          <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                            {modifier.name} +{money(modifier.price)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                <View>
+                  <Text style={styles.extraPickerLabel}>EXTRAS PARA {product.name}</Text>
+                  <View style={styles.chips}>
+                    {modifiers
+                      .filter(
+                        (modifier) =>
+                          product.kind !== 'merch' &&
+                          (modifier.productIds?.includes(product.id) ||
+                            (!modifier.productIds && product.kind !== 'snack')),
+                      )
+                      .map((modifier) => {
+                        const selected = line.modifierIds.includes(modifier.id);
+                        return (
+                          <Pressable
+                            key={modifier.id}
+                            onPress={() => toggleModifier(line, modifier.id)}
+                            style={[styles.chip, selected && styles.chipSelected]}
+                          >
+                            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                              {modifier.name} +{money(modifier.price)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                  </View>
                 </View>
               )}
             </View>
@@ -1137,6 +1140,9 @@ const styles = StyleSheet.create({
     width: 32,
   },
   quantityText: { color: '#2d211b', fontWeight: '900', minWidth: 18, textAlign: 'center' },
+  extraPickerLabel: {
+    color: '#8f4f35', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 8, marginTop: 4,
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: {
     borderColor: '#cdbba9',
