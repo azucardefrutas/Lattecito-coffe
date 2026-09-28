@@ -1,6 +1,7 @@
 export type SaleExtra = { id: string; name: string; unitPrice: number };
 
 export type DetailedSaleItem = {
+  standaloneExtraId?: string;
   productId?: string;
   productName?: string;
   sizeIndex?: number;
@@ -69,6 +70,20 @@ export function dailySalesBreakdown(sales: SaleForSummary[]): DailySalesBreakdow
 
   for (const sale of paid) {
     for (const item of sale.items) {
+      if (item.standaloneExtraId) {
+        const extraKey = item.standaloneExtraId;
+        const total = extraMap.get(extraKey) ?? {
+          key: extraKey,
+          id: item.standaloneExtraId,
+          name: item.name,
+          quantity: 0,
+          amount: 0,
+        };
+        total.quantity += item.quantity;
+        total.amount += item.unitPrice * item.quantity;
+        extraMap.set(extraKey, total);
+        continue;
+      }
       const productId = item.productId ?? `legacy:${item.name.toLocaleLowerCase('es-MX')}`;
       const key = `${productId}|${item.sizeIndex ?? item.size}`;
       const extrasUnit = (item.extras ?? []).reduce((sum, extra) => sum + extra.unitPrice, 0);

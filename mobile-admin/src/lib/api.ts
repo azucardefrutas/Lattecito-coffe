@@ -20,6 +20,7 @@ export type Product = {
   imageUrl?: string;
 };
 export type SaleItem = {
+  standaloneExtraId?: string;
   productId?: string;
   productName?: string;
   sizeIndex?: number;

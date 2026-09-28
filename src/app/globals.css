@@ -2776,6 +2776,14 @@ tr:hover td {
 .daily-lines span {
   color: var(--muted);
 }
+.compact-history-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.compact-history-row .small-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
 .daily-total {
   display: flex;
   align-items: center;
@@ -2992,20 +3000,34 @@ tr:hover td {
 }
 .sales-extra-catalog-list {
   grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
 }
-.sales-extra-catalog-list span {
-  padding: 7px 10px;
-  border-radius: 999px;
-  color: var(--muted);
+.sales-extra-catalog-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  color: var(--ink);
   background: white;
   border: 1px solid var(--glass-border);
-  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
 }
-.sales-extra-catalog-list b {
-  color: var(--ink);
+.sales-extra-catalog-list button > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sales-extra-catalog-list button b {
+  overflow-wrap: anywhere;
+}
+.sales-extra-catalog-list button small {
+  color: var(--muted);
 }
 .sales-cart > article,
 .sales-ticket-list > article {
@@ -3304,6 +3326,14 @@ tr:hover td {
   .daily-lines > div {
     align-items: flex-start;
   }
+  .compact-history-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .compact-history-row .small-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: center;
+  }
   .ticket-card-header {
     display: flex;
     align-items: flex-start;
@@ -3315,6 +3345,17 @@ tr:hover td {
 
 @media (max-width: 560px) {
   .sales-product-grid {
+    grid-template-columns: 1fr;
+  }
+  .sales-extra-catalog {
+    grid-template-columns: 1fr;
+  }
+  .sales-extra-catalog > .small-button {
+    width: 100%;
+    justify-content: center;
+  }
+  .sales-extra-catalog-list {
+    grid-column: 1;
     grid-template-columns: 1fr;
   }
   .sales-summary-grid {

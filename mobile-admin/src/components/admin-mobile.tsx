@@ -33,6 +33,12 @@ type Tab = 'resumen' | 'caja' | 'ventas' | 'inventario' | 'costos';
 type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
 
 const sizes = ['Chico', 'Mediano', 'Grande'];
+const standaloneExtraPrefix = 'extra:';
+const standaloneExtraProductId = (modifierId: string) => `${standaloneExtraPrefix}${modifierId}`;
+const standaloneExtraId = (productId: string) =>
+  productId.startsWith(standaloneExtraPrefix)
+    ? productId.slice(standaloneExtraPrefix.length)
+    : null;
 const money = (cents: number) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cents / 100);
 
@@ -215,6 +221,11 @@ export function AdminMobile() {
   const cartTotal = useMemo(
     () =>
       cartLines.reduce((sum, line) => {
+        const extraId = standaloneExtraId(line.productId);
+        if (extraId) {
+          const extra = modifiers.find((modifier) => modifier.id === extraId);
+          return sum + (extra?.price ?? 0) * line.quantity;
+        }
         const product = products.find((item) => item.id === line.productId);
         const extras = line.modifierIds.reduce(
           (modifierSum, id) =>
@@ -234,6 +245,16 @@ export function AdminMobile() {
       [key]: current[key]
         ? { ...current[key], quantity: current[key].quantity + 1 }
         : { productId: product.id, size, quantity: 1, modifierIds: [] },
+    }));
+  };
+  const addStandaloneExtra = (modifierId: string) => {
+    const productId = standaloneExtraProductId(modifierId);
+    const key = cartKey(productId, 0);
+    setCart((current) => ({
+      ...current,
+      [key]: current[key]
+        ? { ...current[key], quantity: current[key].quantity + 1 }
+        : { productId, size: 0, quantity: 1, modifierIds: [] },
     }));
   };
   const changeQuantity = (line: CartLine, delta: number) => {
@@ -273,6 +294,17 @@ export function AdminMobile() {
   const editSale = (sale: Sale) => {
     const next: Record<string, CartLine> = {};
     for (const item of sale.items) {
+      if (item.standaloneExtraId) {
+        const productId = standaloneExtraProductId(item.standaloneExtraId);
+        const key = cartKey(productId, 0);
+        next[key] = {
+          productId,
+          size: 0,
+          quantity: item.quantity,
+          modifierIds: [],
+        };
+        continue;
+      }
       if (!item.productId || item.sizeIndex === undefined) {
         setError(
           'Este ticket antiguo no contiene los datos necesarios para editarlo. Puedes eliminarlo.',
@@ -594,24 +626,26 @@ export function AdminMobile() {
             <View key={product.id} style={styles.card}>
               <Text style={styles.cardTitle}>{product.name}</Text>
               <View style={styles.costRow}>
-                {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map((size, index) => (
-                  <View key={size} style={styles.costField}>
-                    <Text style={styles.smallLabel}>{size}</Text>
-                    <TextInput
-                      keyboardType="decimal-pad"
-                      onChangeText={(value) =>
-                        setCostDrafts((current) => ({
-                          ...current,
-                          [product.id]: (current[product.id] ?? ['0', '0', '0']).map(
-                            (item, itemIndex) => (itemIndex === index ? value : item),
-                          ),
-                        }))
-                      }
-                      style={styles.costInput}
-                      value={costDrafts[product.id]?.[index] ?? '0'}
-                    />
-                  </View>
-                ))}
+                {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map(
+                  (size, index) => (
+                    <View key={size} style={styles.costField}>
+                      <Text style={styles.smallLabel}>{size}</Text>
+                      <TextInput
+                        keyboardType="decimal-pad"
+                        onChangeText={(value) =>
+                          setCostDrafts((current) => ({
+                            ...current,
+                            [product.id]: (current[product.id] ?? ['0', '0', '0']).map(
+                              (item, itemIndex) => (itemIndex === index ? value : item),
+                            ),
+                          }))
+                        }
+                        style={styles.costInput}
+                        value={costDrafts[product.id]?.[index] ?? '0'}
+                      />
+                    </View>
+                  ),
+                )}
               </View>
               <ActionButton label="Guardar costos" onPress={() => saveCosts(product.id)} />
             </View>
@@ -640,16 +674,34 @@ export function AdminMobile() {
               <Text numberOfLines={2} style={styles.muted}>
                 {product.description}
               </Text>
-              {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map((size, index) => (
-                <View key={size} style={styles.sizeRow}>
-                  <Text style={styles.sizeText}>
-                    {size} · {money(product.prices[index] ?? 0)}
-                  </Text>
-                  <Pressable onPress={() => addProduct(product, index)} style={styles.plus}>
-                    <Text style={styles.plusText}>+</Text>
-                  </Pressable>
-                </View>
-              ))}
+              {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map(
+                (size, index) => (
+                  <View key={size} style={styles.sizeRow}>
+                    <Text style={styles.sizeText}>
+                      {size} · {money(product.prices[index] ?? 0)}
+                    </Text>
+                    <Pressable onPress={() => addProduct(product, index)} style={styles.plus}>
+                      <Text style={styles.plusText}>+</Text>
+                    </Pressable>
+                  </View>
+                ),
+              )}
+            </View>
+          </View>
+        ))}
+
+        <Text style={styles.sectionTitle}>Extras</Text>
+        {!modifiers.length && <Text style={styles.empty}>Todavía no hay extras disponibles.</Text>}
+        {modifiers.map((modifier) => (
+          <View key={modifier.id} style={styles.card}>
+            <View style={styles.rowBetween}>
+              <View style={styles.flex}>
+                <Text style={styles.cardTitle}>{modifier.name}</Text>
+                <Text style={styles.muted}>Extra · {money(modifier.price)}</Text>
+              </View>
+              <Pressable onPress={() => addStandaloneExtra(modifier.id)} style={styles.plus}>
+                <Text style={styles.plusText}>+</Text>
+              </Pressable>
             </View>
           </View>
         ))}
@@ -657,15 +709,49 @@ export function AdminMobile() {
         <Text style={styles.sectionTitle}>Cuenta</Text>
         {!cartLines.length && <Text style={styles.empty}>Usa el + para agregar productos.</Text>}
         {cartLines.map((line) => {
-          const product = products.find((item) => item.id === line.productId)!;
+          const extraId = standaloneExtraId(line.productId);
+          const standaloneExtra = extraId
+            ? modifiers.find((modifier) => modifier.id === extraId)
+            : null;
+          if (standaloneExtra) {
+            return (
+              <View key={cartKey(line.productId, line.size)} style={styles.card}>
+                <View style={styles.rowBetween}>
+                  <View style={styles.flex}>
+                    <Text style={styles.cardTitle}>{standaloneExtra.name}</Text>
+                    <Text style={styles.muted}>Extra · {money(standaloneExtra.price)}</Text>
+                  </View>
+                  <View style={styles.quantity}>
+                    <Pressable
+                      onPress={() => changeQuantity(line, -1)}
+                      style={styles.quantityButton}
+                    >
+                      <Text>−</Text>
+                    </Pressable>
+                    <Text style={styles.quantityText}>{line.quantity}</Text>
+                    <Pressable
+                      onPress={() => changeQuantity(line, 1)}
+                      style={styles.quantityButton}
+                    >
+                      <Text>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            );
+          }
+          const product = products.find((item) => item.id === line.productId);
+          if (!product) return null;
           return (
             <View key={cartKey(line.productId, line.size)} style={styles.card}>
               <View style={styles.rowBetween}>
                 <View style={styles.flex}>
                   <Text style={styles.cardTitle}>{product.name}</Text>
                   <Text style={styles.muted}>
-                    {product.kind === 'snack' || product.kind === 'merch' ? 'Pieza' : sizes[line.size]} ·{' '}
-                    {money(product.prices[line.size])}
+                    {product.kind === 'snack' || product.kind === 'merch'
+                      ? 'Pieza'
+                      : sizes[line.size]}{' '}
+                    · {money(product.prices[line.size])}
                   </Text>
                 </View>
                 <View style={styles.quantity}>
@@ -1141,7 +1227,12 @@ const styles = StyleSheet.create({
   },
   quantityText: { color: '#2d211b', fontWeight: '900', minWidth: 18, textAlign: 'center' },
   extraPickerLabel: {
-    color: '#8f4f35', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 8, marginTop: 4,
+    color: '#8f4f35',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginTop: 4,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: {

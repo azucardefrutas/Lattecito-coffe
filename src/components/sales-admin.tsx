@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown,
+  Download,
   Minus,
   Pencil,
   Plus,
@@ -14,13 +15,14 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { PublicCatalog } from '@/lib/catalog-schema';
-import { money, sizes } from '@/lib/model';
+import { money, sizes, standaloneExtraId, standaloneExtraProductId } from '@/lib/model';
 import {
   displaySaleItem,
   receiptText,
   type DailySalesBreakdown,
   type SaleForSummary,
 } from '@/lib/sales-summary';
+import { createCashReportPdf, type CashReportDay } from '@/lib/cash-report-pdf';
 
 type Sale = SaleForSummary & {
   createdBy: string;
@@ -97,6 +99,21 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
   const orderLines = useMemo(
     () =>
       lines.flatMap((line) => {
+        const extraId = standaloneExtraId(line.productId);
+        if (extraId) {
+          const extra = modifiers.find((candidate) => candidate.id === extraId);
+          if (!extra) return [];
+          return [
+            {
+              ...line,
+              key: key(line.productId, line.size),
+              name: extra.name,
+              sizeLabel: 'Extra',
+              extras: [],
+              amount: extra.price * line.quantity,
+            },
+          ];
+        }
         const product = products.find((candidate) => candidate.id === line.productId);
         if (!product) return [];
         const selectedExtras = line.modifierIds.flatMap((id) => {
@@ -125,8 +142,10 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
     [orderLines],
   );
   const dailyUnitCount = useMemo(
-    () => data?.daily.products.reduce((sum, product) => sum + product.quantity, 0) ?? 0,
-    [data?.daily.products],
+    () =>
+      (data?.daily.products.reduce((sum, product) => sum + product.quantity, 0) ?? 0) +
+      (data?.daily.extras.reduce((sum, extra) => sum + extra.quantity, 0) ?? 0),
+    [data?.daily.extras, data?.daily.products],
   );
 
   function key(productId: string, size: number) {
@@ -142,6 +161,10 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
         : { productId, size, quantity: 1, modifierIds: [] },
     }));
     setOrderSummaryOpen(false);
+  }
+
+  function addStandaloneExtra(modifierId: string) {
+    add(standaloneExtraProductId(modifierId), 0);
   }
 
   function quantity(line: CartLine, delta: number) {
@@ -192,6 +215,17 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
   function editSale(sale: Sale) {
     const next: Record<string, CartLine> = {};
     for (const item of sale.items) {
+      if (item.standaloneExtraId) {
+        const productId = standaloneExtraProductId(item.standaloneExtraId);
+        const id = key(productId, 0);
+        next[id] = {
+          productId,
+          size: 0,
+          quantity: item.quantity,
+          modifierIds: [],
+        };
+        continue;
+      }
       if (!item.productId || item.sizeIndex === undefined) {
         setError(
           'Este ticket antiguo no contiene los datos necesarios para editarlo. Puedes eliminarlo.',
@@ -316,6 +350,20 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
       setError('No fue posible compartir el comprobante. Puedes imprimirlo o guardarlo como PDF.');
     }
+  }
+
+  function downloadHistoryPdf(day: CashReportDay) {
+    const bytes = createCashReportPdf(day);
+    const file = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer;
+    const url = URL.createObjectURL(new Blob([file], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lattecito-corte-caja-${day.date}.pdf`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
   if (!data)
@@ -501,16 +549,25 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
                 </span>
                 <p>
                   {modifiers.length
-                    ? 'Agrega una bebida y selecciona debajo los extras que llevará.'
+                    ? 'Agrégalos por separado con + o selecciónalos dentro de una bebida.'
                     : 'Todavía no hay extras. Puedes crearlos sin salir del área de administración.'}
                 </p>
               </div>
               {modifiers.length > 0 && (
                 <div className="sales-extra-catalog-list">
                   {modifiers.map((extra) => (
-                    <span key={extra.id}>
-                      {extra.name} <b>+{money(extra.price)}</b>
-                    </span>
+                    <button
+                      key={extra.id}
+                      onClick={() => addStandaloneExtra(extra.id)}
+                      type="button"
+                    >
+                      <span>
+                        <b>{extra.name}</b>
+                        <small>Extra</small>
+                      </span>
+                      <strong>{money(extra.price)}</strong>
+                      <Plus aria-hidden="true" size={15} />
+                    </button>
                   ))}
                 </div>
               )}
@@ -520,6 +577,39 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
             </section>
             <div className="sales-cart">
               {lines.map((line) => {
+                const extraId = standaloneExtraId(line.productId);
+                const standaloneExtra = extraId
+                  ? modifiers.find((candidate) => candidate.id === extraId)
+                  : null;
+                if (standaloneExtra) {
+                  return (
+                    <article key={key(line.productId, line.size)}>
+                      <div className="section-heading compact">
+                        <div>
+                          <strong>{standaloneExtra.name}</strong>
+                          <p>Extra · {money(standaloneExtra.price)}</p>
+                        </div>
+                        <div className="sales-quantity">
+                          <button
+                            aria-label={`Quitar una unidad de ${standaloneExtra.name}`}
+                            onClick={() => quantity(line, -1)}
+                            type="button"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <b aria-label={`${line.quantity} unidades`}>{line.quantity}</b>
+                          <button
+                            aria-label={`Agregar una unidad de ${standaloneExtra.name}`}
+                            onClick={() => quantity(line, 1)}
+                            type="button"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                }
                 const product = products.find((candidate) => candidate.id === line.productId);
                 if (!product) return null;
                 const available = modifiers.filter(
@@ -753,14 +843,22 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
       <section className="panel">
         <span className="eyebrow">ÚLTIMOS 7 DÍAS</span>
         <h2>Historial compacto</h2>
-        <div className="daily-lines">
+        <div className="daily-lines compact-history-list">
           {data.history.map((day) => (
-            <div key={day.date}>
+            <div className="compact-history-row" key={day.date}>
               <span>
                 {new Date(`${day.date}T12:00:00`).toLocaleDateString('es-MX')} · {day.tickets}{' '}
                 tickets
               </span>
               <strong>{money(day.total)}</strong>
+              <button
+                aria-label={`Descargar corte de caja del ${day.date}`}
+                className="small-button"
+                onClick={() => downloadHistoryPdf(day)}
+                type="button"
+              >
+                <Download size={15} /> Descargar PDF
+              </button>
             </div>
           ))}
         </div>

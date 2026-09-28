@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dailySalesBreakdown, receiptText, type SaleForSummary } from '../src/lib/sales-summary.ts';
+import { createCashReportPdf } from '../src/lib/cash-report-pdf.ts';
+import { standaloneExtraId, standaloneExtraProductId } from '../src/lib/model.ts';
 
 const sales: SaleForSummary[] = [
   {
@@ -81,4 +83,65 @@ test('digital receipt separates extras, payment and cash change', () => {
   assert.match(text, /\+ Shot extra · \$20\.00/);
   assert.match(text, /Total: \$120\.00/);
   assert.match(text, /Cambio: \$30\.00/);
+});
+
+test('standalone extras are counted as extras and not as drinks', () => {
+  const standaloneSale: SaleForSummary = {
+    id: 'sale-extra',
+    number: 3,
+    date: '2026-09-22T17:00:00.000Z',
+    items: [
+      {
+        standaloneExtraId: 'tapioca',
+        name: 'Perlas de tapioca',
+        size: 'Extra',
+        quantity: 2,
+        baseUnitPrice: 1500,
+        extras: [],
+        unitPrice: 1500,
+        cost: 300,
+      },
+    ],
+    subtotal: 3000,
+    total: 3000,
+    payment: 'Efectivo',
+    paymentStatus: 'Pagado',
+    received: 3000,
+    change: 0,
+  };
+  const result = dailySalesBreakdown([standaloneSale]);
+  assert.equal(result.products.length, 0);
+  assert.deepEqual(result.extras, [
+    {
+      key: 'tapioca',
+      id: 'tapioca',
+      name: 'Perlas de tapioca',
+      quantity: 2,
+      amount: 3000,
+    },
+  ]);
+});
+
+test('standalone extra cart ids round-trip safely', () => {
+  const productId = standaloneExtraProductId('tapioca');
+  assert.equal(productId, 'extra:tapioca');
+  assert.equal(standaloneExtraId(productId), 'tapioca');
+  assert.equal(standaloneExtraId('latte'), null);
+});
+
+test('cash report generator returns a complete PDF document', () => {
+  const pdf = createCashReportPdf({
+    date: '2026-09-22',
+    tickets: 8,
+    total: 125000,
+    cash: 75000,
+    transfers: 50000,
+    pendingTransfers: 15000,
+    cost: 43000,
+  });
+  const text = new TextDecoder('windows-1252').decode(pdf);
+  assert.match(text, /^%PDF-1\.4/);
+  assert.match(text, /CORTE DE CAJA/);
+  assert.match(text, /Tickets registrados/);
+  assert.match(text, /%%EOF\s*$/);
 });

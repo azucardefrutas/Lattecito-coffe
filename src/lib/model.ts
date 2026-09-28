@@ -36,6 +36,7 @@ export type Sale = {
   date: string;
   sessionId: string;
   items: {
+    standaloneExtraId?: string;
     productId?: string;
     productName?: string;
     sizeIndex?: number;
@@ -94,6 +95,13 @@ export type Store = {
   modifiers: Modifier[];
 };
 export const sizes = ['Chico', 'Mediano', 'Grande'];
+const standaloneExtraPrefix = 'extra:';
+export const standaloneExtraProductId = (modifierId: string) =>
+  `${standaloneExtraPrefix}${modifierId}`;
+export const standaloneExtraId = (productId: string) =>
+  productId.startsWith(standaloneExtraPrefix) && productId.length > standaloneExtraPrefix.length
+    ? productId.slice(standaloneExtraPrefix.length)
+    : null;
 export const money = (cents: number) =>
   new Intl.NumberFormat('es-MX', {
     style: 'currency',

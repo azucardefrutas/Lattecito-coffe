@@ -10,7 +10,7 @@ import {
   type InventoryRecipe,
   type InventoryState,
 } from './inventory-schema';
-import { calculate, sizes, type Line, type Product } from './model';
+import { calculate, sizes, standaloneExtraId, type Line, type Product } from './model';
 import {
   dailySalesBreakdown,
   type DailySalesBreakdown,
@@ -351,7 +351,7 @@ async function quoteMobileSale(lines: Line[]) {
     readCosts(),
     readInventoryState(),
   ]);
-  const base = calculate(operationalProducts(catalog, costs), lines, 0, catalog.modifiers);
+  const products = operationalProducts(catalog, costs);
   const recipes = new Map(
     inventory.recipes.map((recipe) => [
       `${recipe.targetType}:${recipe.targetId}:${recipe.sizeIndex}`,
@@ -359,20 +359,52 @@ async function quoteMobileSale(lines: Line[]) {
     ]),
   );
   const needs = new Map<string, number>();
-  const items = base.items.map((quoted, index) => {
-    const line = lines[index];
-    const product = catalog.products.find((candidate) => candidate.id === line.productId)!;
-    const recipe = recipes.get(`product:${line.productId}:${line.size}`) ?? [];
-    const modifierRecipes = (line.modifierIds ?? []).flatMap(
-      (id) => recipes.get(`modifier:${id}:-1`) ?? [],
-    );
+  const items = lines.map((line) => {
+    const extraId = standaloneExtraId(line.productId);
+    const standaloneExtra = extraId
+      ? catalog.modifiers.find((modifier) => modifier.id === extraId && modifier.active !== false)
+      : null;
+    if (extraId && !standaloneExtra) throw new Error('Ese extra ya no está disponible.');
+    if (
+      extraId &&
+      (line.size !== 0 ||
+        !Number.isInteger(line.quantity) ||
+        line.quantity < 1 ||
+        line.quantity > 99 ||
+        (line.modifierIds?.length ?? 0) > 0)
+    )
+      throw new Error('Revisa la cantidad del extra.');
+
+    const quoted = standaloneExtra
+      ? {
+          standaloneExtraId: standaloneExtra.id,
+          name: standaloneExtra.name,
+          size: 'Extra',
+          quantity: line.quantity,
+          baseUnitPrice: standaloneExtra.price,
+          extras: [],
+          unitPrice: standaloneExtra.price,
+          cost: 0,
+        }
+      : calculate(products, [line], 0, catalog.modifiers).items[0];
+    const product = extraId
+      ? null
+      : (catalog.products.find((candidate) => candidate.id === line.productId) ?? null);
+    const recipe = extraId
+      ? (recipes.get(`modifier:${extraId}:-1`) ?? [])
+      : (recipes.get(`product:${line.productId}:${line.size}`) ?? []);
+    const modifierRecipes = extraId
+      ? []
+      : (line.modifierIds ?? []).flatMap((id) => recipes.get(`modifier:${id}:-1`) ?? []);
     let recipeCost = 0;
     for (const ingredient of [...recipe, ...modifierRecipes]) {
       const item = inventory.items.find(
         (candidate) => candidate.id === ingredient.itemId && candidate.active,
       );
       if (!item)
-        throw new Error(`La receta de ${product.name} contiene un insumo inactivo o inexistente.`);
+        throw new Error(
+          `La receta de ${product?.name ?? standaloneExtra?.name ?? 'este extra'} contiene un insumo inactivo o inexistente.`,
+        );
       validateUnitQuantity(ingredient.quantity, item.unit);
       needs.set(item.id, (needs.get(item.id) ?? 0) + ingredient.quantity * line.quantity);
       recipeCost += ingredient.quantity * item.costPerUnit;
@@ -382,10 +414,11 @@ async function quoteMobileSale(lines: Line[]) {
       cost: recipe.length || modifierRecipes.length ? Math.round(recipeCost) : quoted.cost,
     };
   });
+  const subtotal = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const quote = {
     items,
-    subtotal: base.subtotal,
-    total: base.total,
+    subtotal,
+    total: subtotal,
     cost: items.reduce((sum, item) => sum + item.cost * item.quantity, 0),
   };
   return {
