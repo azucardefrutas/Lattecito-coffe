@@ -16,6 +16,13 @@ import {
   type DailySalesBreakdown,
   type DetailedSaleItem,
 } from './sales-summary';
+import {
+  expenseTotal,
+  mergeFinancialHistory,
+  type FinancialHistoryDay,
+  type SalesHistoryDay,
+  type SupplyExpense,
+} from './expenses';
 
 type UserRole = 'admin' | 'developer';
 
@@ -41,15 +48,7 @@ export type MobileSale = {
   correctionReason: string;
 };
 
-export type ArchivedSalesDay = {
-  date: string;
-  tickets: number;
-  total: number;
-  cash: number;
-  transfers: number;
-  pendingTransfers: number;
-  cost: number;
-};
+export type ArchivedSalesDay = FinancialHistoryDay;
 
 export class SupabaseConflictError extends Error {}
 
@@ -177,6 +176,28 @@ function saleFromRow(row: Record<string, unknown>): MobileSale {
     lastEditedBy: row.last_edited_by ? String(row.last_edited_by) : '',
     correctionReason: row.correction_reason ? String(row.correction_reason) : '',
   };
+}
+
+function expenseFromRow(row: Record<string, unknown>): SupplyExpense {
+  return {
+    id: String(row.id),
+    businessDate: String(row.business_date),
+    date: new Date(String(row.created_at)).toISOString(),
+    name: String(row.name),
+    quantity: row.quantity === null || row.quantity === undefined ? null : Number(row.quantity),
+    total: Number(row.total),
+    createdBy: String(row.created_by),
+    updatedBy: row.updated_by ? String(row.updated_by) : '',
+  };
+}
+
+function cancunBusinessDate() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Cancun',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function itemFromRow(row: Record<string, unknown>): InventoryItem {
@@ -559,18 +580,81 @@ export async function updateProductCosts(productId: string, costs: number[]) {
   if (error) throw databaseError('No fue posible guardar los costos.', error);
 }
 
+export async function saveSupplyExpense(input: {
+  id: string;
+  user: MobileUser;
+  name: string;
+  quantity: number | null;
+  total: number;
+}) {
+  await ensureSupabase();
+  const client = serverClient();
+  const today = cancunBusinessDate();
+  const existing = await client
+    .from('supply_expenses')
+    .select('*')
+    .eq('id', input.id)
+    .maybeSingle();
+  if (existing.error) throw databaseError('No fue posible revisar el gasto.', existing.error);
+
+  if (existing.data) {
+    if (String(existing.data.business_date) !== today)
+      throw new Error('Sólo se pueden editar gastos del día actual.');
+    const updated = await client
+      .from('supply_expenses')
+      .update({
+        name: input.name.trim(),
+        quantity: input.quantity,
+        total: input.total,
+        updated_by: input.user.username,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.id)
+      .eq('business_date', today)
+      .select('*')
+      .single();
+    if (updated.error || !updated.data)
+      throw databaseError('No fue posible actualizar el gasto.', updated.error);
+    return expenseFromRow(updated.data);
+  }
+
+  const inserted = await client
+    .from('supply_expenses')
+    .insert({
+      id: input.id,
+      name: input.name.trim(),
+      quantity: input.quantity,
+      total: input.total,
+      created_by: input.user.username,
+    })
+    .select('*')
+    .single();
+  if (inserted.error || !inserted.data)
+    throw databaseError('No fue posible registrar el gasto.', inserted.error);
+  return expenseFromRow(inserted.data);
+}
+
+export async function deleteSupplyExpense(id: string) {
+  await ensureSupabase();
+  const { data, error } = await serverClient()
+    .from('supply_expenses')
+    .delete()
+    .eq('id', id)
+    .eq('business_date', cancunBusinessDate())
+    .select('id')
+    .maybeSingle();
+  if (error) throw databaseError('No fue posible eliminar el gasto.', error);
+  if (!data) throw new Error('El gasto no existe o ya no corresponde al día actual.');
+  return { id: String(data.id) };
+}
+
 export async function readMobileDashboard() {
   const [{ catalog }, costs, inventory] = await Promise.all([
     readSupabaseCatalog(),
     readCosts(),
     readInventoryState(),
   ]);
-  const today = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Cancun',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const today = cancunBusinessDate();
   const client = serverClient();
   const purge = await client.rpc('purge_old_admin_sales');
   if (purge.error)
@@ -583,7 +667,7 @@ export async function readMobileDashboard() {
     month: '2-digit',
     day: '2-digit',
   }).format(weekStart);
-  const [result, historyResult] = await Promise.all([
+  const [result, historyResult, expenseResult] = await Promise.all([
     client
       .from('admin_sales')
       .select('*')
@@ -597,11 +681,20 @@ export async function readMobileDashboard() {
       )
       .gte('business_date', weekStartDate)
       .order('business_date', { ascending: false }),
+    client
+      .from('supply_expenses')
+      .select('*')
+      .gte('business_date', weekStartDate)
+      .order('created_at', { ascending: false }),
   ]);
   if (result.error) throw databaseError('No fue posible leer las ventas del día.', result.error);
   if (historyResult.error)
     throw databaseError('No fue posible leer el historial diario.', historyResult.error);
+  if (expenseResult.error)
+    throw databaseError('No fue posible leer los gastos de insumos.', expenseResult.error);
   const sales = (result.data ?? []).map((row) => saleFromRow(row));
+  const weekExpenses = (expenseResult.data ?? []).map((row) => expenseFromRow(row));
+  const expenses = weekExpenses.filter((expense) => expense.businessDate === today);
   const paid = sales.filter((sale) => sale.paymentStatus === 'Pagado');
   const daily: DailySalesBreakdown = dailySalesBreakdown(sales);
   const total = daily.total;
@@ -609,19 +702,22 @@ export async function readMobileDashboard() {
   const missingCostCount = catalog.products.filter(
     (product) => product.active && !(costs.get(product.id) ?? []).some((cost) => cost > 0),
   ).length;
+  const salesHistory = (historyResult.data ?? []).map((row) => ({
+    date: String(row.business_date),
+    tickets: Number(row.ticket_count),
+    total: Number(row.paid_total),
+    cash: Number(row.cash_total),
+    transfers: Number(row.transfer_total),
+    pendingTransfers: Number(row.pending_total),
+    cost: Number(row.cost_total),
+  })) satisfies SalesHistoryDay[];
+  const expensesTotal = expenseTotal(expenses);
   return {
     catalog,
     inventory,
     daily,
-    history: (historyResult.data ?? []).map((row) => ({
-      date: String(row.business_date),
-      tickets: Number(row.ticket_count),
-      total: Number(row.paid_total),
-      cash: Number(row.cash_total),
-      transfers: Number(row.transfer_total),
-      pendingTransfers: Number(row.pending_total),
-      cost: Number(row.cost_total),
-    })) satisfies ArchivedSalesDay[],
+    expenses,
+    history: mergeFinancialHistory(salesHistory, weekExpenses) satisfies ArchivedSalesDay[],
     costs: Object.fromEntries(catalog.products.map((p) => [p.id, costs.get(p.id) ?? [0, 0, 0]])),
     sales,
     summary: {
@@ -630,6 +726,8 @@ export async function readMobileDashboard() {
       transfers: daily.transfers,
       pendingTransfers: daily.pendingTransfers,
       grossProfit: total - totalCost,
+      expenses: expensesTotal,
+      netAfterExpenses: total - expensesTotal,
       missingCostCount,
       tickets: daily.tickets,
     },

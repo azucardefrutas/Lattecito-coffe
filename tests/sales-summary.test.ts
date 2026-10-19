@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { dailySalesBreakdown, receiptText, type SaleForSummary } from '../src/lib/sales-summary.ts';
 import { createCashReportPdf } from '../src/lib/cash-report-pdf.ts';
 import { standaloneExtraId, standaloneExtraProductId } from '../src/lib/model.ts';
+import { expenseTotal, mergeFinancialHistory } from '../src/lib/expenses.ts';
 
 const sales: SaleForSummary[] = [
   {
@@ -138,10 +139,49 @@ test('cash report generator returns a complete PDF document', () => {
     transfers: 50000,
     pendingTransfers: 15000,
     cost: 43000,
+    expenses: 20000,
+    net: 105000,
   });
   const text = new TextDecoder('windows-1252').decode(pdf);
   assert.match(text, /^%PDF-1\.4/);
   assert.match(text, /CORTE DE CAJA/);
   assert.match(text, /Tickets registrados/);
+  assert.match(text, /Gastos de insumos/);
   assert.match(text, /%%EOF\s*$/);
+});
+
+test('expenses reduce available sales money and create expense-only history days', () => {
+  const expenses = [
+    {
+      businessDate: '2026-10-18',
+      total: 50000,
+    },
+    {
+      businessDate: '2026-10-18',
+      total: 20000,
+    },
+    {
+      businessDate: '2026-10-17',
+      total: 15000,
+    },
+  ];
+  assert.equal(expenseTotal(expenses), 85000);
+  const history = mergeFinancialHistory(
+    [
+      {
+        date: '2026-10-18',
+        tickets: 4,
+        total: 500000,
+        cash: 300000,
+        transfers: 200000,
+        pendingTransfers: 0,
+        cost: 100000,
+      },
+    ],
+    expenses,
+  );
+  assert.equal(history[0].expenses, 70000);
+  assert.equal(history[0].net, 430000);
+  assert.equal(history[1].total, 0);
+  assert.equal(history[1].net, -15000);
 });

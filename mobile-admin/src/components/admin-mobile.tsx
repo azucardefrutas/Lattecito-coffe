@@ -24,12 +24,13 @@ import {
   login,
   sendCommand,
   type Dashboard,
+  type Expense,
   type Product,
   type Sale,
 } from '@/lib/api';
 import { InventoryMobile } from '@/components/inventory-mobile';
 
-type Tab = 'resumen' | 'caja' | 'ventas' | 'inventario' | 'costos';
+type Tab = 'resumen' | 'caja' | 'ventas' | 'gastos' | 'inventario' | 'costos';
 type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
 
 const sizes = ['Chico', 'Mediano', 'Grande'];
@@ -161,6 +162,10 @@ export function AdminMobile() {
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [costDrafts, setCostDrafts] = useState<Record<string, string[]>>({});
+  const [expenseName, setExpenseName] = useState('');
+  const [expenseQuantity, setExpenseQuantity] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -436,6 +441,80 @@ export function AdminMobile() {
     }
   };
 
+  const clearExpenseForm = () => {
+    setExpenseName('');
+    setExpenseQuantity('');
+    setExpenseAmount('');
+    setEditingExpense(null);
+  };
+
+  const saveExpense = async () => {
+    if (!token) return;
+    const quantity = expenseQuantity.trim() ? Number(expenseQuantity) : null;
+    const total = Math.round(Number(expenseAmount) * 100);
+    if (expenseName.trim().length < 2) {
+      setError('Escribe el nombre del insumo comprado.');
+      return;
+    }
+    if (quantity !== null && (!Number.isFinite(quantity) || quantity <= 0)) {
+      setError('La cantidad debe ser mayor que cero o quedar vacía.');
+      return;
+    }
+    if (!Number.isInteger(total) || total < 1) {
+      setError('Escribe el precio total del gasto.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await sendCommand(token, {
+        action: 'save-expense',
+        id: editingExpense?.id ?? Crypto.randomUUID(),
+        name: expenseName.trim(),
+        quantity,
+        total,
+      });
+      clearExpenseForm();
+      await refresh(token);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'No fue posible guardar el gasto.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const editExpense = (expense: Expense) => {
+    setEditingExpense(expense);
+    setExpenseName(expense.name);
+    setExpenseQuantity(expense.quantity === null ? '' : String(expense.quantity));
+    setExpenseAmount(String(expense.total / 100));
+  };
+
+  const confirmDeleteExpense = (expense: Expense) => {
+    Alert.alert('Eliminar gasto', `¿Eliminar ${expense.name} por ${money(expense.total)}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          if (!token) return;
+          setBusy(true);
+          try {
+            await sendCommand(token, { action: 'delete-expense', expenseId: expense.id });
+            if (editingExpense?.id === expense.id) clearExpenseForm();
+            await refresh(token);
+          } catch (nextError) {
+            setError(
+              nextError instanceof Error ? nextError.message : 'No fue posible eliminar el gasto.',
+            );
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
   const shareTicket = async (sale: Sale) => {
     const lines = sale.items.flatMap((item) => [
       `${item.quantity} × ${item.name} · ${item.size}`,
@@ -514,6 +593,8 @@ export function AdminMobile() {
             <Metric label="Transferencias" value={money(summary.transfers)} />
             <Metric label="En espera" value={money(summary.pendingTransfers)} />
             <Metric label="Tickets" value={String(summary.tickets)} />
+            <Metric label="Gastos de insumos" value={money(summary.expenses)} />
+            <Metric label="Disponible" value={money(summary.netAfterExpenses)} accent />
             <Metric
               label="Ganancia bruta"
               value={summary.missingCostCount ? 'Configura costos' : money(summary.grossProfit)}
@@ -572,9 +653,9 @@ export function AdminMobile() {
               <View key={day.date} style={styles.dailyRow}>
                 <Text style={styles.dailyName}>
                   {new Date(`${day.date}T12:00:00`).toLocaleDateString('es-MX')} · {day.tickets}{' '}
-                  tickets
+                  tickets · gastos {money(day.expenses)}
                 </Text>
-                <Text style={styles.dailyAmount}>{money(day.total)}</Text>
+                <Text style={styles.dailyAmount}>{money(day.net)} neto</Text>
               </View>
             ))}
           </View>
@@ -601,6 +682,90 @@ export function AdminMobile() {
             />
           ))}
           {!dashboard.sales.length && <Text style={styles.empty}>Todavía no hay ventas hoy.</Text>}
+        </View>
+      );
+    }
+
+    if (tab === 'gastos') {
+      return (
+        <View style={styles.section}>
+          <Text style={styles.pageTitle}>Gastos de insumos</Text>
+          <Text style={styles.pageCopy}>
+            Cada compra se resta de la venta cobrada para mostrar el dinero disponible del día.
+          </Text>
+          <View style={styles.metricGrid}>
+            <Metric label="Venta cobrada" value={money(dashboard.summary.total)} />
+            <Metric label="Gastos" value={money(dashboard.summary.expenses)} />
+            <Metric label="Disponible" value={money(dashboard.summary.netAfterExpenses)} accent />
+          </View>
+          <View style={styles.card}>
+            <TextInput
+              maxLength={100}
+              onChangeText={setExpenseName}
+              placeholder="Nombre del insumo, ej. Matcha"
+              placeholderTextColor="#8b7868"
+              style={styles.input}
+              value={expenseName}
+            />
+            <TextInput
+              keyboardType="decimal-pad"
+              onChangeText={setExpenseQuantity}
+              placeholder="Cantidad (opcional)"
+              placeholderTextColor="#8b7868"
+              style={styles.input}
+              value={expenseQuantity}
+            />
+            <TextInput
+              keyboardType="decimal-pad"
+              onChangeText={setExpenseAmount}
+              placeholder="Precio total"
+              placeholderTextColor="#8b7868"
+              style={styles.input}
+              value={expenseAmount}
+            />
+            <ActionButton
+              label={editingExpense ? 'Guardar cambio' : 'Registrar gasto'}
+              disabled={busy}
+              onPress={saveExpense}
+            />
+            {editingExpense ? (
+              <ActionButton label="Cancelar edición" tone="light" onPress={clearExpenseForm} />
+            ) : null}
+          </View>
+          <Text style={styles.sectionTitle}>Compras registradas hoy</Text>
+          {dashboard.expenses.map((expense) => (
+            <View key={expense.id} style={styles.card}>
+              <View style={styles.rowBetween}>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{expense.name}</Text>
+                  <Text style={styles.muted}>
+                    {expense.quantity === null
+                      ? 'Cantidad no indicada'
+                      : `Cantidad: ${expense.quantity}`}
+                    {' · '}
+                    {new Date(expense.date).toLocaleTimeString('es-MX', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+                <Text style={styles.saleTotal}>− {money(expense.total)}</Text>
+              </View>
+              <ActionButton
+                label="Editar gasto"
+                tone="light"
+                onPress={() => editExpense(expense)}
+              />
+              <ActionButton
+                label="Eliminar gasto"
+                tone="danger"
+                onPress={() => confirmDeleteExpense(expense)}
+              />
+            </View>
+          ))}
+          {!dashboard.expenses.length && (
+            <Text style={styles.empty}>Todavía no hay gastos registrados hoy.</Text>
+          )}
         </View>
       );
     }
@@ -882,6 +1047,7 @@ export function AdminMobile() {
     { id: 'resumen', label: 'Resumen' },
     { id: 'caja', label: 'Caja' },
     { id: 'ventas', label: 'Ventas' },
+    { id: 'gastos', label: 'Gastos' },
     { id: 'inventario', label: 'Inventario' },
     ...(dashboard.user.role === 'developer' ? [{ id: 'costos' as Tab, label: 'Costos' }] : []),
   ];

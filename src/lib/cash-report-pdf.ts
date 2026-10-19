@@ -6,6 +6,8 @@ export type CashReportDay = {
   transfers: number;
   pendingTransfers: number;
   cost: number;
+  expenses: number;
+  net: number;
 };
 
 const moneyFormatter = new Intl.NumberFormat('es-MX', {
@@ -90,6 +92,8 @@ export function createCashReportPdf(day: CashReportDay) {
     ['Transferencias pendientes', formatMoney(day.pendingTransfers)],
     ['Venta total cobrada', formatMoney(day.total)],
     ['Costo registrado', formatMoney(day.cost)],
+    ['Gastos de insumos', formatMoney(day.expenses)],
+    ['Disponible después de gastos', formatMoney(day.net)],
   ];
   let y = 585;
   rows.forEach(([label, value], index) => {
@@ -100,22 +104,22 @@ export function createCashReportPdf(day: CashReportDay) {
     y -= 48;
   });
 
-  commands.push('q 0.48 0.25 0.2 rg 48 222 516 58 re f Q');
-  addText(commands, 'GANANCIA ESTIMADA', 64, 251, 10, { bold: true, color: '0.91 0.82 0.75' });
-  addText(commands, formatMoney(profit), 390, 244, 19, { bold: true, color: '1 1 1' });
+  commands.push('q 0.48 0.25 0.2 rg 48 126 516 58 re f Q');
+  addText(commands, 'GANANCIA ESTIMADA', 64, 155, 10, { bold: true, color: '0.91 0.82 0.75' });
+  addText(commands, formatMoney(profit), 390, 148, 19, { bold: true, color: '1 1 1' });
   addText(
     commands,
     'La ganancia se calcula como venta cobrada menos costo registrado.',
     48,
-    188,
+    104,
     9,
     { color: '0.42 0.34 0.3' },
   );
-  addText(commands, `Generado: ${generated}`, 48, 86, 8, { color: '0.5 0.43 0.39' });
-  addText(commands, 'Documento generado desde Historial compacto.', 48, 68, 8, {
+  addText(commands, `Generado: ${generated}`, 48, 52, 8, { color: '0.5 0.43 0.39' });
+  addText(commands, 'Documento generado desde Historial compacto.', 48, 36, 8, {
     color: '0.5 0.43 0.39',
   });
-  addText(commands, '1', 548, 68, 8, { color: '0.5 0.43 0.39' });
+  addText(commands, '1', 548, 36, 8, { color: '0.5 0.43 0.39' });
 
   const content = `${commands.join('\n')}\n`;
   const objects = [

@@ -6,10 +6,12 @@ import {
   confirmMobileTransfer,
   correctMobileSale,
   createMobileSale,
+  deleteSupplyExpense,
   deleteMobileSale,
   readMobileDashboard,
   saveInventoryItem,
   saveInventoryRecipe,
+  saveSupplyExpense,
   updateProductCosts,
 } from '@/lib/supabase-store';
 import {
@@ -22,6 +24,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const cents = z.number().int().min(0).max(100_000_000);
+const expenseQuantity = z.number().positive().max(100_000).multipleOf(0.001).nullable();
 const command = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('sale'),
@@ -68,6 +71,14 @@ const command = z.discriminatedUnion('action', [
     saleId: z.uuid(),
     reason: z.string().trim().min(5).max(300),
   }),
+  z.object({
+    action: z.literal('save-expense'),
+    id: z.uuid(),
+    name: z.string().trim().min(2).max(100),
+    quantity: expenseQuantity,
+    total: cents.min(1),
+  }),
+  z.object({ action: z.literal('delete-expense'), expenseId: z.uuid() }),
   z.object({ action: z.literal('inventory-item'), item: inventoryItemInputSchema }),
   z.object({
     action: z.literal('inventory-adjust'),
@@ -119,6 +130,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await correctMobileSale({ ...input, user }));
     if (input.action === 'delete-sale')
       return NextResponse.json(await deleteMobileSale(input.saleId, input.reason, user));
+    if (input.action === 'save-expense')
+      return NextResponse.json(await saveSupplyExpense({ ...input, user }));
+    if (input.action === 'delete-expense')
+      return NextResponse.json(await deleteSupplyExpense(input.expenseId));
     if (input.action === 'inventory-item')
       return NextResponse.json(await saveInventoryItem(input.item));
     if (input.action === 'inventory-adjust')

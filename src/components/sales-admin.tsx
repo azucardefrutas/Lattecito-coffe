@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Download,
   Minus,
+  PackageMinus,
   Pencil,
   Plus,
   Printer,
@@ -23,6 +24,7 @@ import {
   type SaleForSummary,
 } from '@/lib/sales-summary';
 import { createCashReportPdf, type CashReportDay } from '@/lib/cash-report-pdf';
+import type { SupplyExpense } from '@/lib/expenses';
 
 type Sale = SaleForSummary & {
   createdBy: string;
@@ -37,10 +39,13 @@ type HistoryDay = {
   transfers: number;
   pendingTransfers: number;
   cost: number;
+  expenses: number;
+  net: number;
 };
 type Dashboard = {
   catalog: PublicCatalog;
   sales: Sale[];
+  expenses: SupplyExpense[];
   daily: DailySalesBreakdown;
   history: HistoryDay[];
   summary: {
@@ -49,6 +54,8 @@ type Dashboard = {
     transfers: number;
     pendingTransfers: number;
     grossProfit: number;
+    expenses: number;
+    netAfterExpenses: number;
     missingCostCount: number;
     tickets: number;
   };
@@ -71,6 +78,10 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [expenseName, setExpenseName] = useState('');
+  const [expenseQuantity, setExpenseQuantity] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [editingExpense, setEditingExpense] = useState<SupplyExpense | null>(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setBusy(true);
@@ -337,6 +348,78 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
     }
   }
 
+  function clearExpenseForm() {
+    setExpenseName('');
+    setExpenseQuantity('');
+    setExpenseAmount('');
+    setEditingExpense(null);
+  }
+
+  async function saveExpense() {
+    const quantity = expenseQuantity.trim() ? Number(expenseQuantity) : null;
+    const amount = Math.round(Number(expenseAmount) * 100);
+    if (expenseName.trim().length < 2) {
+      setError('Escribe el nombre del insumo comprado.');
+      return;
+    }
+    if (quantity !== null && (!Number.isFinite(quantity) || quantity <= 0)) {
+      setError('La cantidad debe ser mayor que cero o quedar vacía.');
+      return;
+    }
+    if (!Number.isInteger(amount) || amount < 1) {
+      setError('Escribe el precio total del gasto.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await send<SupplyExpense>({
+        action: 'save-expense',
+        id: editingExpense?.id ?? crypto.randomUUID(),
+        name: expenseName.trim(),
+        quantity,
+        total: amount,
+      });
+      const wasEditing = Boolean(editingExpense);
+      clearExpenseForm();
+      setNotice(wasEditing ? 'Gasto actualizado y total recalculado.' : 'Gasto registrado.');
+      await load(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible guardar el gasto.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function editExpense(expense: SupplyExpense) {
+    setEditingExpense(expense);
+    setExpenseName(expense.name);
+    setExpenseQuantity(expense.quantity === null ? '' : String(expense.quantity));
+    setExpenseAmount(String(expense.total / 100));
+    setError('');
+    document
+      .getElementById('expense-form')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  async function deleteExpense(expense: SupplyExpense) {
+    if (!window.confirm(`¿Eliminar el gasto de ${expense.name} por ${money(expense.total)}?`))
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await send<{ id: string }>({ action: 'delete-expense', expenseId: expense.id });
+      if (editingExpense?.id === expense.id) clearExpenseForm();
+      setNotice('Gasto eliminado y dinero disponible recalculado.');
+      await load(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible eliminar el gasto.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function shareSale(sale: Sale) {
     const text = receiptText(sale, money);
     try {
@@ -402,6 +485,16 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
           <strong>{money(data.summary.transfers)}</strong>
           <small>{money(data.summary.pendingTransfers)} por confirmar</small>
         </article>
+        <article className="metric-card expense-metric">
+          <span>GASTOS DE INSUMOS</span>
+          <strong>{money(data.summary.expenses)}</strong>
+          <small>compras registradas hoy</small>
+        </article>
+        <article className="metric-card net-metric">
+          <span>DISPONIBLE DESPUÉS DE GASTOS</span>
+          <strong>{money(data.summary.netAfterExpenses)}</strong>
+          <small>venta cobrada menos compras</small>
+        </article>
         <article className="metric-card">
           <span>GANANCIA BRUTA</span>
           <strong>
@@ -460,6 +553,140 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
         <div className="daily-total">
           <span>SUMA COBRADA DEL DÍA</span>
           <strong>{money(data.daily.total)}</strong>
+        </div>
+      </section>
+
+      <section className="panel expense-panel">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">GASTOS DEL DÍA</span>
+            <h2>Compras de insumos</h2>
+          </div>
+          <PackageMinus size={26} />
+        </div>
+        <p>
+          Registra leche, matcha, chocolate u otra compra. El precio total se descuenta de la venta
+          cobrada para mostrar cuánto dinero queda disponible.
+        </p>
+        <div className="expense-layout">
+          <div className="expense-form" id="expense-form">
+            <label className="field">
+              Nombre del insumo
+              <input
+                maxLength={100}
+                placeholder="Ej. Matcha"
+                value={expenseName}
+                onChange={(event) => setExpenseName(event.target.value)}
+              />
+            </label>
+            <div className="form-grid">
+              <label className="field">
+                Cantidad (opcional)
+                <input
+                  inputMode="decimal"
+                  min="0.001"
+                  max="100000"
+                  step="0.001"
+                  placeholder="Ej. 1"
+                  type="number"
+                  value={expenseQuantity}
+                  onChange={(event) => setExpenseQuantity(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                Precio total
+                <input
+                  inputMode="decimal"
+                  min="0.01"
+                  max="1000000"
+                  step="0.01"
+                  placeholder="Ej. 500"
+                  type="number"
+                  value={expenseAmount}
+                  onChange={(event) => setExpenseAmount(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="inline-fields expense-form-actions">
+              <button className="button" disabled={busy} onClick={() => void saveExpense()}>
+                {editingExpense ? 'Guardar cambio' : 'Registrar gasto'}
+              </button>
+              {editingExpense && (
+                <button className="small-button" disabled={busy} onClick={clearExpenseForm}>
+                  Cancelar edición
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="expense-balance" aria-label="Dinero disponible después de gastos">
+            <span>VENTA COBRADA</span>
+            <strong>{money(data.summary.total)}</strong>
+            <span>MENOS GASTOS</span>
+            <strong className="expense-negative">− {money(data.summary.expenses)}</strong>
+            <hr />
+            <span>DINERO DISPONIBLE</span>
+            <b>{money(data.summary.netAfterExpenses)}</b>
+          </div>
+        </div>
+
+        <div className="responsive-table-wrap">
+          <table className="admin-data-table expense-table">
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Insumo</th>
+                <th>Cantidad</th>
+                <th>Precio total</th>
+                <th>Registró</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.expenses.map((expense) => (
+                <tr key={expense.id}>
+                  <td data-label="Hora">
+                    {new Date(expense.date).toLocaleTimeString('es-MX', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </td>
+                  <td data-label="Insumo">
+                    <strong>{expense.name}</strong>
+                  </td>
+                  <td data-label="Cantidad">{expense.quantity ?? '—'}</td>
+                  <td data-label="Precio total">
+                    <strong>{money(expense.total)}</strong>
+                  </td>
+                  <td data-label="Registró">{expense.createdBy}</td>
+                  <td data-label="Acciones">
+                    <div className="table-actions">
+                      <button
+                        className="small-button"
+                        disabled={busy}
+                        onClick={() => editExpense(expense)}
+                      >
+                        <Pencil size={14} /> Editar
+                      </button>
+                      <button
+                        className="danger-button compact-danger"
+                        disabled={busy}
+                        onClick={() => void deleteExpense(expense)}
+                      >
+                        <Trash2 size={14} /> Eliminar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!data.expenses.length && (
+                <tr>
+                  <td className="empty-table" colSpan={6}>
+                    Todavía no hay gastos registrados hoy.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -772,67 +999,99 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
           El registro acumulado está arriba. Estos comprobantes conservan el detalle de cada cobro
           para que puedas consultarlo, editarlo o eliminarlo si hubo un error.
         </p>
-        <div className="sales-ticket-list">
-          {data.sales.map((sale) => (
-            <article className="sales-ticket-card" key={sale.id}>
-              <div className="section-heading compact ticket-card-header">
-                <div>
-                  <strong>Ticket #{sale.number}</strong>
-                  <p>
+        <div className="responsive-table-wrap">
+          <table className="admin-data-table ticket-table">
+            <thead>
+              <tr>
+                <th>Ticket</th>
+                <th>Hora</th>
+                <th>Detalle</th>
+                <th>Pago</th>
+                <th>Total</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.sales.map((sale) => (
+                <tr key={sale.id}>
+                  <td data-label="Ticket">
+                    <strong>#{sale.number}</strong>
+                  </td>
+                  <td data-label="Hora">
                     {new Date(sale.date).toLocaleTimeString('es-MX', {
                       hour: '2-digit',
                       minute: '2-digit',
-                    })}{' '}
-                    · {sale.createdBy}
-                  </p>
-                </div>
-                <b>{money(sale.total)}</b>
-              </div>
-              <div className="ticket-items">
-                {sale.items.map((item, index) => (
-                  <p key={index}>
-                    <b>{item.quantity} ×</b> {displaySaleItem(item)}
-                  </p>
-                ))}
-              </div>
-              <div className="inline-fields ticket-actions">
-                <button className="small-button" onClick={() => setReceipt(sale)} type="button">
-                  Ver comprobante
-                </button>
-                <button
-                  className="small-button"
-                  disabled={busy}
-                  onClick={() => editSale(sale)}
-                  type="button"
-                >
-                  <Pencil size={15} /> Editar
-                </button>
-                <button
-                  aria-label={`Eliminar ticket ${sale.number}`}
-                  className="danger-button compact-danger"
-                  disabled={busy}
-                  onClick={() => {
-                    setDeleteTarget(sale);
-                    setDeleteReason('');
-                  }}
-                  type="button"
-                >
-                  <Trash2 size={15} /> Eliminar
-                </button>
-                {sale.paymentStatus === 'Pendiente' && (
-                  <button
-                    className="small-button"
-                    disabled={busy}
-                    onClick={() => void confirmTransfer(sale.id)}
-                    type="button"
-                  >
-                    Confirmar transferencia
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
-          {!data.sales.length && <p className="muted">Todavía no hay tickets hoy.</p>}
+                    })}
+                    <small>{sale.createdBy}</small>
+                  </td>
+                  <td data-label="Detalle">
+                    <div className="ticket-table-items">
+                      {sale.items.map((item, index) => (
+                        <span key={index}>
+                          <b>{item.quantity} ×</b> {displaySaleItem(item)}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td data-label="Pago">
+                    {sale.payment}
+                    <small>{sale.paymentStatus}</small>
+                  </td>
+                  <td data-label="Total">
+                    <strong>{money(sale.total)}</strong>
+                  </td>
+                  <td data-label="Acciones">
+                    <div className="table-actions ticket-table-actions">
+                      <button
+                        className="small-button"
+                        onClick={() => setReceipt(sale)}
+                        type="button"
+                      >
+                        Ver
+                      </button>
+                      <button
+                        className="small-button"
+                        disabled={busy}
+                        onClick={() => editSale(sale)}
+                        type="button"
+                      >
+                        <Pencil size={14} /> Editar
+                      </button>
+                      <button
+                        aria-label={`Eliminar ticket ${sale.number}`}
+                        className="danger-button compact-danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setDeleteTarget(sale);
+                          setDeleteReason('');
+                        }}
+                        type="button"
+                      >
+                        <Trash2 size={14} /> Eliminar
+                      </button>
+                      {sale.paymentStatus === 'Pendiente' && (
+                        <button
+                          className="small-button"
+                          disabled={busy}
+                          onClick={() => void confirmTransfer(sale.id)}
+                          type="button"
+                        >
+                          Confirmar transferencia
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!data.sales.length && (
+                <tr>
+                  <td className="empty-table" colSpan={6}>
+                    Todavía no hay tickets hoy.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
         <p className="retention-note">
           Los tickets detallados se eliminan automáticamente después de siete días. Los totales
@@ -848,9 +1107,9 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
             <div className="compact-history-row" key={day.date}>
               <span>
                 {new Date(`${day.date}T12:00:00`).toLocaleDateString('es-MX')} · {day.tickets}{' '}
-                tickets
+                tickets · Venta {money(day.total)} · Gastos {money(day.expenses)}
               </span>
-              <strong>{money(day.total)}</strong>
+              <strong>Neto {money(day.net)}</strong>
               <button
                 aria-label={`Descargar corte de caja del ${day.date}`}
                 className="small-button"

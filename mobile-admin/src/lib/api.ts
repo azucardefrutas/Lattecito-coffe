@@ -52,6 +52,16 @@ export type Sale = {
   lastEditedBy: string;
   correctionReason: string;
 };
+export type Expense = {
+  id: string;
+  businessDate: string;
+  date: string;
+  name: string;
+  quantity: number | null;
+  total: number;
+  createdBy: string;
+  updatedBy: string;
+};
 export type InventoryItem = {
   id: string;
   name: string;
@@ -84,6 +94,7 @@ export type Dashboard = {
   catalog: { products: Product[]; modifiers: Modifier[] };
   costs: Record<string, number[]>;
   sales: Sale[];
+  expenses: Expense[];
   inventory: {
     items: InventoryItem[];
     recipes: InventoryRecipe[];
@@ -119,6 +130,8 @@ export type Dashboard = {
     transfers: number;
     pendingTransfers: number;
     cost: number;
+    expenses: number;
+    net: number;
   }[];
   summary: {
     total: number;
@@ -126,6 +139,8 @@ export type Dashboard = {
     transfers: number;
     pendingTransfers: number;
     grossProfit: number;
+    expenses: number;
+    netAfterExpenses: number;
     missingCostCount: number;
     tickets: number;
   };
