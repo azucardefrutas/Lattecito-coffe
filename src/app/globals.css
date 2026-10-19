@@ -2739,6 +2739,100 @@ tr:hover td {
   display: grid;
   gap: 22px;
 }
+.weekly-cash-stack {
+  display: grid;
+  gap: 22px;
+}
+.weekly-cash-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.weekly-cash-hero h2,
+.weekly-expense-form h2 {
+  margin: 6px 0 8px;
+}
+.weekly-cash-hero p,
+.weekly-expense-form p {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--muted);
+}
+.weekly-cash-hero > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+.weekly-balance-card {
+  color: #fff8f0;
+  background: linear-gradient(145deg, #6f392f, #3f251f);
+}
+.weekly-balance-card > span,
+.weekly-balance-card small {
+  color: rgba(255, 248, 240, 0.72);
+}
+.weekly-expense-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 18px;
+}
+.weekly-expense-form {
+  display: grid;
+  gap: 13px;
+}
+.weekly-expense-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.weekly-expense-form input {
+  width: 100%;
+}
+.weekly-formula-card {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  gap: 12px 18px;
+  padding: 22px;
+  border-radius: 18px;
+  color: #fff8f0;
+  background: linear-gradient(145deg, #6f392f, #3f251f);
+}
+.weekly-formula-card span {
+  color: rgba(255, 248, 240, 0.72);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.weekly-formula-card strong,
+.weekly-formula-card b {
+  text-align: right;
+}
+.weekly-formula-card hr,
+.weekly-formula-card small {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.weekly-formula-card hr {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+.weekly-formula-card b {
+  font-size: 24px;
+}
+.weekly-formula-card small {
+  color: rgba(255, 248, 240, 0.72);
+  line-height: 1.5;
+}
+.admin-data-table td > small {
+  display: block;
+  margin-top: 3px;
+}
+.danger-action {
+  color: #9c2d2d !important;
+}
 .sales-summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -3608,6 +3702,26 @@ tr:hover td {
   }
   .delete-ticket-actions .small-button {
     order: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .weekly-cash-hero {
+    align-items: flex-start;
+  }
+  .weekly-cash-metrics,
+  .weekly-expense-layout {
+    grid-template-columns: 1fr;
+  }
+  .weekly-cash-metrics .metric-card {
+    min-height: auto;
+  }
+  .weekly-formula-card {
+    padding: 18px;
+  }
+  .weekly-expense-form .inline-fields,
+  .weekly-expense-form .inline-fields > * {
+    width: 100%;
   }
 }
 

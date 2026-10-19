@@ -5,10 +5,12 @@ import {
   confirmMobileTransfer,
   correctMobileSale,
   createMobileSale,
+  deleteWeeklyCashExpense,
   deleteSupplyExpense,
   deleteMobileSale,
   readMobileDashboard,
   saveSupplyExpense,
+  saveWeeklyCashExpense,
 } from '@/lib/supabase-store';
 
 export const runtime = 'nodejs';
@@ -70,6 +72,14 @@ const command = z.discriminatedUnion('action', [
     total: cents.min(1),
   }),
   z.object({ action: z.literal('delete-expense'), expenseId: z.uuid() }),
+  z.object({
+    action: z.literal('save-weekly-expense'),
+    id: z.uuid(),
+    name: z.string().trim().min(2).max(100),
+    quantity: expenseQuantity,
+    total: cents.min(1),
+  }),
+  z.object({ action: z.literal('delete-weekly-expense'), expenseId: z.uuid() }),
 ]);
 
 function available() {
@@ -125,7 +135,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await deleteMobileSale(input.saleId, input.reason, user));
     if (input.action === 'save-expense')
       return NextResponse.json(await saveSupplyExpense({ ...input, user }));
-    return NextResponse.json(await deleteSupplyExpense(input.expenseId));
+    if (input.action === 'delete-expense')
+      return NextResponse.json(await deleteSupplyExpense(input.expenseId));
+    if (input.action === 'save-weekly-expense')
+      return NextResponse.json(await saveWeeklyCashExpense({ ...input, user }));
+    return NextResponse.json(await deleteWeeklyCashExpense(input.expenseId));
   } catch (error) {
     const message =
       error instanceof z.ZodError

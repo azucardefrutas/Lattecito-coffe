@@ -6,12 +6,14 @@ import {
   confirmMobileTransfer,
   correctMobileSale,
   createMobileSale,
+  deleteWeeklyCashExpense,
   deleteSupplyExpense,
   deleteMobileSale,
   readMobileDashboard,
   saveInventoryItem,
   saveInventoryRecipe,
   saveSupplyExpense,
+  saveWeeklyCashExpense,
   updateProductCosts,
 } from '@/lib/supabase-store';
 import {
@@ -79,6 +81,14 @@ const command = z.discriminatedUnion('action', [
     total: cents.min(1),
   }),
   z.object({ action: z.literal('delete-expense'), expenseId: z.uuid() }),
+  z.object({
+    action: z.literal('save-weekly-expense'),
+    id: z.uuid(),
+    name: z.string().trim().min(2).max(100),
+    quantity: expenseQuantity,
+    total: cents.min(1),
+  }),
+  z.object({ action: z.literal('delete-weekly-expense'), expenseId: z.uuid() }),
   z.object({ action: z.literal('inventory-item'), item: inventoryItemInputSchema }),
   z.object({
     action: z.literal('inventory-adjust'),
@@ -134,6 +144,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(await saveSupplyExpense({ ...input, user }));
     if (input.action === 'delete-expense')
       return NextResponse.json(await deleteSupplyExpense(input.expenseId));
+    if (input.action === 'save-weekly-expense')
+      return NextResponse.json(await saveWeeklyCashExpense({ ...input, user }));
+    if (input.action === 'delete-weekly-expense')
+      return NextResponse.json(await deleteWeeklyCashExpense(input.expenseId));
     if (input.action === 'inventory-item')
       return NextResponse.json(await saveInventoryItem(input.item));
     if (input.action === 'inventory-adjust')

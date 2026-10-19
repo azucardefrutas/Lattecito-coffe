@@ -23,6 +23,7 @@ import {
   type SalesHistoryDay,
   type SupplyExpense,
 } from './expenses';
+import { buildWeeklyCashSummary, businessWeekStart, type WeeklyCashExpense } from './weekly-cash';
 
 type UserRole = 'admin' | 'developer';
 
@@ -182,6 +183,19 @@ function expenseFromRow(row: Record<string, unknown>): SupplyExpense {
   return {
     id: String(row.id),
     businessDate: String(row.business_date),
+    date: new Date(String(row.created_at)).toISOString(),
+    name: String(row.name),
+    quantity: row.quantity === null || row.quantity === undefined ? null : Number(row.quantity),
+    total: Number(row.total),
+    createdBy: String(row.created_by),
+    updatedBy: row.updated_by ? String(row.updated_by) : '',
+  };
+}
+
+function weeklyExpenseFromRow(row: Record<string, unknown>): WeeklyCashExpense {
+  return {
+    id: String(row.id),
+    weekStart: String(row.week_start),
     date: new Date(String(row.created_at)).toISOString(),
     name: String(row.name),
     quantity: row.quantity === null || row.quantity === undefined ? null : Number(row.quantity),
@@ -648,6 +662,76 @@ export async function deleteSupplyExpense(id: string) {
   return { id: String(data.id) };
 }
 
+export async function saveWeeklyCashExpense(input: {
+  id: string;
+  user: MobileUser;
+  name: string;
+  quantity: number | null;
+  total: number;
+}) {
+  await ensureSupabase();
+  const client = serverClient();
+  const weekStart = businessWeekStart(cancunBusinessDate());
+  const existing = await client
+    .from('weekly_cash_expenses')
+    .select('*')
+    .eq('id', input.id)
+    .maybeSingle();
+  if (existing.error)
+    throw databaseError('No fue posible revisar el gasto semanal.', existing.error);
+
+  if (existing.data) {
+    if (String(existing.data.week_start) !== weekStart)
+      throw new Error('Sólo se pueden editar gastos de la semana actual.');
+    const updated = await client
+      .from('weekly_cash_expenses')
+      .update({
+        name: input.name.trim(),
+        quantity: input.quantity,
+        total: input.total,
+        updated_by: input.user.username,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.id)
+      .eq('week_start', weekStart)
+      .select('*')
+      .single();
+    if (updated.error || !updated.data)
+      throw databaseError('No fue posible actualizar el gasto semanal.', updated.error);
+    return weeklyExpenseFromRow(updated.data);
+  }
+
+  const inserted = await client
+    .from('weekly_cash_expenses')
+    .insert({
+      id: input.id,
+      week_start: weekStart,
+      name: input.name.trim(),
+      quantity: input.quantity,
+      total: input.total,
+      created_by: input.user.username,
+    })
+    .select('*')
+    .single();
+  if (inserted.error || !inserted.data)
+    throw databaseError('No fue posible registrar el gasto semanal.', inserted.error);
+  return weeklyExpenseFromRow(inserted.data);
+}
+
+export async function deleteWeeklyCashExpense(id: string) {
+  await ensureSupabase();
+  const { data, error } = await serverClient()
+    .from('weekly_cash_expenses')
+    .delete()
+    .eq('id', id)
+    .eq('week_start', businessWeekStart(cancunBusinessDate()))
+    .select('id')
+    .maybeSingle();
+  if (error) throw databaseError('No fue posible eliminar el gasto semanal.', error);
+  if (!data) throw new Error('El gasto no existe o ya no corresponde a la semana actual.');
+  return { id: String(data.id) };
+}
+
 export async function readMobileDashboard() {
   const [{ catalog }, costs, inventory] = await Promise.all([
     readSupabaseCatalog(),
@@ -655,6 +739,7 @@ export async function readMobileDashboard() {
     readInventoryState(),
   ]);
   const today = cancunBusinessDate();
+  const currentWeekStart = businessWeekStart(today);
   const client = serverClient();
   const purge = await client.rpc('purge_old_admin_sales');
   if (purge.error)
@@ -667,7 +752,7 @@ export async function readMobileDashboard() {
     month: '2-digit',
     day: '2-digit',
   }).format(weekStart);
-  const [result, historyResult, expenseResult] = await Promise.all([
+  const [result, historyResult, expenseResult, weeklyExpenseResult] = await Promise.all([
     client
       .from('admin_sales')
       .select('*')
@@ -686,12 +771,19 @@ export async function readMobileDashboard() {
       .select('*')
       .gte('business_date', weekStartDate)
       .order('created_at', { ascending: false }),
+    client
+      .from('weekly_cash_expenses')
+      .select('*')
+      .eq('week_start', currentWeekStart)
+      .order('created_at', { ascending: false }),
   ]);
   if (result.error) throw databaseError('No fue posible leer las ventas del día.', result.error);
   if (historyResult.error)
     throw databaseError('No fue posible leer el historial diario.', historyResult.error);
   if (expenseResult.error)
     throw databaseError('No fue posible leer los gastos de insumos.', expenseResult.error);
+  if (weeklyExpenseResult.error)
+    throw databaseError('No fue posible leer los gastos semanales.', weeklyExpenseResult.error);
   const sales = (result.data ?? []).map((row) => saleFromRow(row));
   const weekExpenses = (expenseResult.data ?? []).map((row) => expenseFromRow(row));
   const expenses = weekExpenses.filter((expense) => expense.businessDate === today);
@@ -711,6 +803,12 @@ export async function readMobileDashboard() {
     pendingTransfers: Number(row.pending_total),
     cost: Number(row.cost_total),
   })) satisfies SalesHistoryDay[];
+  const weeklyCash = buildWeeklyCashSummary({
+    today,
+    salesDays: salesHistory,
+    dailyExpenses: weekExpenses,
+    weeklyExpenses: (weeklyExpenseResult.data ?? []).map((row) => weeklyExpenseFromRow(row)),
+  });
   const expensesTotal = expenseTotal(expenses);
   return {
     catalog,
@@ -718,6 +816,7 @@ export async function readMobileDashboard() {
     daily,
     expenses,
     history: mergeFinancialHistory(salesHistory, weekExpenses) satisfies ArchivedSalesDay[],
+    weeklyCash,
     costs: Object.fromEntries(catalog.products.map((p) => [p.id, costs.get(p.id) ?? [0, 0, 0]])),
     sales,
     summary: {

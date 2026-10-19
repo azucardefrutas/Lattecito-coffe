@@ -62,6 +62,16 @@ export type Expense = {
   createdBy: string;
   updatedBy: string;
 };
+export type WeeklyExpense = {
+  id: string;
+  weekStart: string;
+  date: string;
+  name: string;
+  quantity: number | null;
+  total: number;
+  createdBy: string;
+  updatedBy: string;
+};
 export type InventoryItem = {
   id: string;
   name: string;
@@ -95,6 +105,30 @@ export type Dashboard = {
   costs: Record<string, number[]>;
   sales: Sale[];
   expenses: Expense[];
+  weeklyCash: {
+    weekStart: string;
+    weekEnd: string;
+    days: {
+      date: string;
+      label: string;
+      tickets: number;
+      total: number;
+      cash: number;
+      transfers: number;
+      pendingTransfers: number;
+      cost: number;
+    }[];
+    expenses: WeeklyExpense[];
+    salesTotal: number;
+    cashTotal: number;
+    transferTotal: number;
+    pendingTotal: number;
+    tickets: number;
+    dailyExpensesTotal: number;
+    weeklyExpensesTotal: number;
+    expensesTotal: number;
+    expectedBalance: number;
+  };
   inventory: {
     items: InventoryItem[];
     recipes: InventoryRecipe[];

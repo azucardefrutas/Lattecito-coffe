@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   BadgeDollarSign,
+  CalendarDays,
   Coffee,
   ImagePlus,
   LayoutDashboard,
@@ -26,8 +27,17 @@ import {
 import { formatBusinessHours, parseBusinessHours } from '@/lib/business-hours';
 import InventoryAdmin from '@/components/inventory-admin';
 import SalesAdmin from '@/components/sales-admin';
+import WeeklyCashAdmin from '@/components/weekly-cash-admin';
 
-type View = 'summary' | 'sales' | 'products' | 'extras' | 'inventory' | 'business' | 'permissions';
+type View =
+  | 'summary'
+  | 'sales'
+  | 'weekly-cash'
+  | 'products'
+  | 'extras'
+  | 'inventory'
+  | 'business'
+  | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
 const isUnitProduct = (kind: CatalogProduct['kind']) => kind === 'snack' || kind === 'merch';
 const productKindLabel = (kind: CatalogProduct['kind'], lowercase = false) => {
@@ -291,6 +301,12 @@ export default function CatalogAdmin() {
             onClick={() => setView('sales')}
           />
           <Nav
+            active={view === 'weekly-cash'}
+            icon={<CalendarDays />}
+            label="Caja total"
+            onClick={() => setView('weekly-cash')}
+          />
+          <Nav
             active={view === 'products'}
             icon={<Coffee />}
             label="Menú"
@@ -339,15 +355,17 @@ export default function CatalogAdmin() {
                 ? 'Resumen'
                 : view === 'sales'
                   ? 'Ventas del día'
-                  : view === 'products'
-                    ? 'Menú'
-                    : view === 'extras'
-                      ? 'Extras'
-                      : view === 'inventory'
-                        ? 'Inventario'
-                        : view === 'business'
-                          ? 'Datos del negocio'
-                          : 'Permisos'}
+                  : view === 'weekly-cash'
+                    ? 'Caja total'
+                    : view === 'products'
+                      ? 'Menú'
+                      : view === 'extras'
+                        ? 'Extras'
+                        : view === 'inventory'
+                          ? 'Inventario'
+                          : view === 'business'
+                            ? 'Datos del negocio'
+                            : 'Permisos'}
             </h1>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
@@ -410,6 +428,8 @@ export default function CatalogAdmin() {
         )}
 
         {view === 'sales' && <SalesAdmin onManageExtras={() => setView('extras')} />}
+
+        {view === 'weekly-cash' && <WeeklyCashAdmin />}
 
         {view === 'products' && (
           <section className="panel">

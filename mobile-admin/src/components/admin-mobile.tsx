@@ -27,10 +27,11 @@ import {
   type Expense,
   type Product,
   type Sale,
+  type WeeklyExpense,
 } from '@/lib/api';
 import { InventoryMobile } from '@/components/inventory-mobile';
 
-type Tab = 'resumen' | 'caja' | 'ventas' | 'gastos' | 'inventario' | 'costos';
+type Tab = 'resumen' | 'caja' | 'semanal' | 'ventas' | 'gastos' | 'inventario' | 'costos';
 type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
 
 const sizes = ['Chico', 'Mediano', 'Grande'];
@@ -166,6 +167,10 @@ export function AdminMobile() {
   const [expenseQuantity, setExpenseQuantity] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [weeklyExpenseName, setWeeklyExpenseName] = useState('');
+  const [weeklyExpenseQuantity, setWeeklyExpenseQuantity] = useState('');
+  const [weeklyExpenseAmount, setWeeklyExpenseAmount] = useState('');
+  const [editingWeeklyExpense, setEditingWeeklyExpense] = useState<WeeklyExpense | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -515,6 +520,82 @@ export function AdminMobile() {
     ]);
   };
 
+  const clearWeeklyExpenseForm = () => {
+    setWeeklyExpenseName('');
+    setWeeklyExpenseQuantity('');
+    setWeeklyExpenseAmount('');
+    setEditingWeeklyExpense(null);
+  };
+
+  const saveWeeklyExpense = async () => {
+    if (!token) return;
+    const quantity = weeklyExpenseQuantity.trim() ? Number(weeklyExpenseQuantity) : null;
+    const total = Math.round(Number(weeklyExpenseAmount) * 100);
+    if (weeklyExpenseName.trim().length < 2) return setError('Escribe el nombre del insumo.');
+    if (quantity !== null && (!Number.isFinite(quantity) || quantity <= 0))
+      return setError('La cantidad debe ser mayor que cero o quedar vacía.');
+    if (!Number.isInteger(total) || total < 1)
+      return setError('Escribe el precio total del gasto.');
+    setBusy(true);
+    setError('');
+    try {
+      await sendCommand(token, {
+        action: 'save-weekly-expense',
+        id: editingWeeklyExpense?.id ?? Crypto.randomUUID(),
+        name: weeklyExpenseName.trim(),
+        quantity,
+        total,
+      });
+      clearWeeklyExpenseForm();
+      await refresh(token);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'No fue posible guardar el gasto.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const editWeeklyExpense = (expense: WeeklyExpense) => {
+    setEditingWeeklyExpense(expense);
+    setWeeklyExpenseName(expense.name);
+    setWeeklyExpenseQuantity(expense.quantity === null ? '' : String(expense.quantity));
+    setWeeklyExpenseAmount(String(expense.total / 100));
+  };
+
+  const confirmDeleteWeeklyExpense = (expense: WeeklyExpense) => {
+    Alert.alert(
+      'Eliminar gasto semanal',
+      `¿Eliminar ${expense.name} por ${money(expense.total)}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            if (!token) return;
+            setBusy(true);
+            try {
+              await sendCommand(token, {
+                action: 'delete-weekly-expense',
+                expenseId: expense.id,
+              });
+              if (editingWeeklyExpense?.id === expense.id) clearWeeklyExpenseForm();
+              await refresh(token);
+            } catch (nextError) {
+              setError(
+                nextError instanceof Error
+                  ? nextError.message
+                  : 'No fue posible eliminar el gasto semanal.',
+              );
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const shareTicket = async (sale: Sale) => {
     const lines = sale.items.flatMap((item) => [
       `${item.quantity} × ${item.name} · ${item.size}`,
@@ -663,6 +744,122 @@ export function AdminMobile() {
             Los comprobantes detallados se eliminan después de siete días. Los totales diarios
             permanecen guardados.
           </Text>
+        </View>
+      );
+    }
+
+    if (tab === 'semanal') {
+      const weekly = dashboard.weeklyCash;
+      return (
+        <View style={styles.section}>
+          <Text style={styles.pageTitle}>Caja total</Text>
+          <Text style={styles.pageCopy}>
+            Acumulado automático de lunes a domingo y saldo final después de insumos.
+          </Text>
+          <View style={styles.metricGrid}>
+            <Metric label="Ventas semanales" value={money(weekly.salesTotal)} />
+            <Metric label="Insumos totales" value={money(weekly.expensesTotal)} />
+            <Metric label="Saldo esperado" value={money(weekly.expectedBalance)} accent />
+            <Metric label="Tickets cobrados" value={String(weekly.tickets)} />
+          </View>
+          <Text style={styles.sectionTitle}>Ventas por día</Text>
+          <View style={styles.card}>
+            {weekly.days.map((day) => (
+              <View key={day.date} style={styles.dailyRow}>
+                <Text style={styles.dailyName}>
+                  {day.label} · {day.tickets} tickets
+                </Text>
+                <Text style={styles.dailyAmount}>{money(day.total)}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.sectionTitle}>Restar insumo de la semana</Text>
+          <View style={styles.card}>
+            <TextInput
+              maxLength={100}
+              onChangeText={setWeeklyExpenseName}
+              placeholder="Nombre del insumo, ej. Matcha"
+              placeholderTextColor="#8b7868"
+              style={styles.input}
+              value={weeklyExpenseName}
+            />
+            <TextInput
+              keyboardType="decimal-pad"
+              onChangeText={setWeeklyExpenseQuantity}
+              placeholder="Cantidad (opcional)"
+              placeholderTextColor="#8b7868"
+              style={styles.input}
+              value={weeklyExpenseQuantity}
+            />
+            <TextInput
+              keyboardType="decimal-pad"
+              onChangeText={setWeeklyExpenseAmount}
+              placeholder="Precio total"
+              placeholderTextColor="#8b7868"
+              style={styles.input}
+              value={weeklyExpenseAmount}
+            />
+            <ActionButton
+              label={editingWeeklyExpense ? 'Guardar cambio' : 'Registrar gasto semanal'}
+              disabled={busy}
+              onPress={saveWeeklyExpense}
+            />
+            {editingWeeklyExpense ? (
+              <ActionButton
+                label="Cancelar edición"
+                tone="light"
+                onPress={clearWeeklyExpenseForm}
+              />
+            ) : null}
+          </View>
+          <Text style={styles.sectionTitle}>Cuadre final</Text>
+          <View style={styles.card}>
+            <View style={styles.dailyRow}>
+              <Text style={styles.dailyName}>Ventas de la semana</Text>
+              <Text style={styles.dailyAmount}>{money(weekly.salesTotal)}</Text>
+            </View>
+            <View style={styles.dailyRow}>
+              <Text style={styles.dailyName}>Gastos registrados por día</Text>
+              <Text style={styles.dailyAmount}>− {money(weekly.dailyExpensesTotal)}</Text>
+            </View>
+            <View style={styles.dailyRow}>
+              <Text style={styles.dailyName}>Gastos generales semanales</Text>
+              <Text style={styles.dailyAmount}>− {money(weekly.weeklyExpensesTotal)}</Text>
+            </View>
+            <View style={styles.dailyTotal}>
+              <Text style={styles.dailyTotalLabel}>SALDO FINAL ESPERADO</Text>
+              <Text style={styles.dailyTotalValue}>{money(weekly.expectedBalance)}</Text>
+            </View>
+          </View>
+          <Text style={styles.sectionTitle}>Gastos generales de la semana</Text>
+          {weekly.expenses.map((expense) => (
+            <View key={expense.id} style={styles.card}>
+              <View style={styles.rowBetween}>
+                <View style={styles.flex}>
+                  <Text style={styles.cardTitle}>{expense.name}</Text>
+                  <Text style={styles.muted}>
+                    {expense.quantity === null
+                      ? 'Cantidad no indicada'
+                      : `Cantidad: ${expense.quantity}`}
+                  </Text>
+                </View>
+                <Text style={styles.saleTotal}>− {money(expense.total)}</Text>
+              </View>
+              <ActionButton
+                label="Editar gasto"
+                tone="light"
+                onPress={() => editWeeklyExpense(expense)}
+              />
+              <ActionButton
+                label="Eliminar gasto"
+                tone="danger"
+                onPress={() => confirmDeleteWeeklyExpense(expense)}
+              />
+            </View>
+          ))}
+          {!weekly.expenses.length && (
+            <Text style={styles.empty}>Todavía no hay gastos generales en esta semana.</Text>
+          )}
         </View>
       );
     }
@@ -1046,6 +1243,7 @@ export function AdminMobile() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'resumen', label: 'Resumen' },
     { id: 'caja', label: 'Caja' },
+    { id: 'semanal', label: 'Semanal' },
     { id: 'ventas', label: 'Ventas' },
     { id: 'gastos', label: 'Gastos' },
     { id: 'inventario', label: 'Inventario' },
