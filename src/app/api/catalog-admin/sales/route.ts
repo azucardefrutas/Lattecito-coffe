@@ -28,7 +28,7 @@ const command = z.discriminatedUnion('action', [
       .array(
         z.object({
           productId: z.string().min(1).max(80),
-          size: z.number().int().min(0).max(2),
+          size: z.number().int().min(0).max(9),
           quantity: z.number().int().min(1).max(99),
           modifierIds: z.array(z.string().min(1).max(80)).max(20).optional(),
         }),
@@ -49,7 +49,7 @@ const command = z.discriminatedUnion('action', [
       .array(
         z.object({
           productId: z.string().min(1).max(80),
-          size: z.number().int().min(0).max(2),
+          size: z.number().int().min(0).max(9),
           quantity: z.number().int().min(1).max(99),
           modifierIds: z.array(z.string().min(1).max(80)).max(20).optional(),
         }),

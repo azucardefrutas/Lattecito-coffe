@@ -16,6 +16,23 @@ test('catalog accepts secure product photos', () => {
   assert.equal(catalogSchema.parse(catalog).products[0].imageUrl, catalog.products[0].imageUrl);
 });
 
+test('catalog accepts manually configured cup sizes and requires one drink price per size', () => {
+  const catalog = structuredClone(catalogSchema.parse(snapshot));
+  catalog.sizes = ['Mediano', 'Grande'];
+  catalog.products = catalog.products.map((product) => ({
+    ...product,
+    prices: product.kind === 'drink' ? product.prices.slice(1) : product.prices,
+  }));
+  assert.deepEqual(catalogSchema.parse(catalog).sizes, ['Mediano', 'Grande']);
+
+  catalog.products[0].prices = [5000];
+  assert.throws(() => catalogSchema.parse(catalog), /precio por cada tamaño/);
+
+  catalog.products[0].prices = [5000, 6000];
+  catalog.sizes = ['Grande', 'grande'];
+  assert.throws(() => catalogSchema.parse(catalog), /no pueden repetirse/);
+});
+
 test('catalog rejects duplicate products and incompatible extras', () => {
   const duplicate = structuredClone(snapshot);
   duplicate.products.push({ ...duplicate.products[0] });

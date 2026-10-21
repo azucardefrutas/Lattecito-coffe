@@ -10,6 +10,7 @@ import {
   PackageOpen,
   Plus,
   RefreshCw,
+  Ruler,
   Save,
   Settings2,
   ShieldCheck,
@@ -17,7 +18,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { money, sizes } from '@/lib/model';
+import { money } from '@/lib/model';
 import {
   removeCatalogProduct,
   type CatalogModifier,
@@ -34,6 +35,7 @@ type View =
   | 'sales'
   | 'weekly-cash'
   | 'products'
+  | 'sizes'
   | 'extras'
   | 'inventory'
   | 'business'
@@ -44,14 +46,14 @@ const productKindLabel = (kind: CatalogProduct['kind'], lowercase = false) => {
   const label = kind === 'snack' ? 'Snack' : kind === 'merch' ? 'Merch' : 'Bebida';
   return lowercase ? label.toLowerCase() : label;
 };
-const blankProduct = (kind: CatalogProduct['kind'] = 'drink'): CatalogProduct => ({
+const blankProduct = (kind: CatalogProduct['kind'] = 'drink', sizeCount = 3): CatalogProduct => ({
   id: crypto.randomUUID(),
   name: '',
   kind,
   category:
     kind === 'snack' ? 'Snacks y repostería' : kind === 'merch' ? 'Merch de Lattecito' : 'Cafés',
   description: '',
-  prices: [0, 0, 0],
+  prices: Array.from({ length: kind === 'drink' ? sizeCount : 1 }, () => 0),
   active: true,
   tone: kind === 'snack' ? 'cocoa' : kind === 'merch' ? 'dark' : 'coffee',
 });
@@ -313,6 +315,12 @@ export default function CatalogAdmin() {
             onClick={() => setView('products')}
           />
           <Nav
+            active={view === 'sizes'}
+            icon={<Ruler />}
+            label="Tamaños"
+            onClick={() => setView('sizes')}
+          />
+          <Nav
             active={view === 'extras'}
             icon={<Sparkles />}
             label="Extras"
@@ -359,13 +367,15 @@ export default function CatalogAdmin() {
                     ? 'Caja total'
                     : view === 'products'
                       ? 'Menú'
-                      : view === 'extras'
-                        ? 'Extras'
-                        : view === 'inventory'
-                          ? 'Inventario'
-                          : view === 'business'
-                            ? 'Datos del negocio'
-                            : 'Permisos'}
+                      : view === 'sizes'
+                        ? 'Tamaños de vaso'
+                        : view === 'extras'
+                          ? 'Extras'
+                          : view === 'inventory'
+                            ? 'Inventario'
+                            : view === 'business'
+                              ? 'Datos del negocio'
+                              : 'Permisos'}
             </h1>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
@@ -442,7 +452,7 @@ export default function CatalogAdmin() {
                 <button
                   className="button"
                   onClick={() => {
-                    setProduct(blankProduct('drink'));
+                    setProduct(blankProduct('drink', catalog.sizes.length));
                     setImage(null);
                   }}
                 >
@@ -451,7 +461,7 @@ export default function CatalogAdmin() {
                 <button
                   className="button secondary"
                   onClick={() => {
-                    setProduct(blankProduct('snack'));
+                    setProduct(blankProduct('snack', catalog.sizes.length));
                     setImage(null);
                   }}
                 >
@@ -460,7 +470,7 @@ export default function CatalogAdmin() {
                 <button
                   className="button secondary"
                   onClick={() => {
-                    setProduct(blankProduct('merch'));
+                    setProduct(blankProduct('merch', catalog.sizes.length));
                     setImage(null);
                   }}
                 >
@@ -482,7 +492,9 @@ export default function CatalogAdmin() {
                     <strong>
                       {isUnitProduct(item.kind)
                         ? `${money(item.prices[0])} por pieza`
-                        : item.prices.map(money).join(' · ')}
+                        : catalog.sizes
+                            .map((size, index) => `${size}: ${money(item.prices[index])}`)
+                            .join(' · ')}
                     </strong>
                     <small>{item.active ? 'Visible en el menú' : 'Oculta'}</small>
                     <button
@@ -546,6 +558,14 @@ export default function CatalogAdmin() {
           </section>
         )}
 
+        {view === 'sizes' && (
+          <CupSizesAdmin
+            catalog={catalog}
+            busy={busy}
+            onSave={(next) => save(next, 'Tamaños y precios actualizados.')}
+          />
+        )}
+
         {view === 'business' && (
           <BusinessForm
             catalog={catalog}
@@ -562,6 +582,7 @@ export default function CatalogAdmin() {
       {product && (
         <ProductEditor
           product={product}
+          sizes={catalog.sizes}
           image={image}
           busy={busy}
           existing={catalog.products.some((item) => item.id === product.id)}
@@ -645,8 +666,171 @@ function Nav({
   );
 }
 
+type SizeDraft = { key: string; sourceIndex: number | null; name: string };
+
+function CupSizesAdmin({
+  catalog,
+  busy,
+  onSave,
+}: {
+  catalog: PublicCatalog;
+  busy: boolean;
+  onSave: (catalog: PublicCatalog) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState<SizeDraft[]>(() =>
+    catalog.sizes.map((name, index) => ({ key: `${index}-${name}`, sourceIndex: index, name })),
+  );
+  const [newSize, setNewSize] = useState('');
+  const [localError, setLocalError] = useState('');
+
+  useEffect(() => {
+    setDraft(
+      catalog.sizes.map((name, index) => ({ key: `${index}-${name}`, sourceIndex: index, name })),
+    );
+  }, [catalog.sizes]);
+
+  async function addSize() {
+    if (draft.some((size, index) => size.name.trim() !== catalog.sizes[index]))
+      return setLocalError('Guarda primero los cambios de nombre.');
+    const name = newSize.trim();
+    if (name.length < 2) return setLocalError('Escribe un nombre de al menos dos caracteres.');
+    if (
+      draft.some((size) => size.name.toLocaleLowerCase('es-MX') === name.toLocaleLowerCase('es-MX'))
+    )
+      return setLocalError('Ese tamaño ya existe.');
+    if (draft.length >= 10) return setLocalError('Puedes administrar hasta diez tamaños.');
+    setLocalError('');
+    const saved = await onSave({
+      ...catalog,
+      sizes: [...catalog.sizes, name],
+      products: catalog.products.map((product) =>
+        product.kind === 'drink'
+          ? { ...product, prices: [...product.prices, product.prices.at(-1) ?? 0] }
+          : product,
+      ),
+    });
+    if (saved) setNewSize('');
+  }
+
+  async function removeSize(index: number) {
+    if (draft.some((size, currentIndex) => size.name.trim() !== catalog.sizes[currentIndex]))
+      return setLocalError('Guarda primero los cambios de nombre.');
+    if (catalog.sizes.length === 1)
+      return setLocalError('Debe existir al menos un tamaño de vaso.');
+    setLocalError('');
+    await onSave({
+      ...catalog,
+      sizes: catalog.sizes.filter((_, currentIndex) => currentIndex !== index),
+      products: catalog.products.map((product) =>
+        product.kind === 'drink'
+          ? {
+              ...product,
+              prices: product.prices.filter((_, currentIndex) => currentIndex !== index),
+            }
+          : product,
+      ),
+    });
+  }
+
+  async function saveSizes() {
+    const names = draft.map((size) => size.name.trim());
+    if (!names.length) return setLocalError('Debe existir al menos un tamaño de vaso.');
+    if (names.some((name) => name.length < 2))
+      return setLocalError('Todos los tamaños necesitan un nombre válido.');
+    if (new Set(names.map((name) => name.toLocaleLowerCase('es-MX'))).size !== names.length)
+      return setLocalError('Los tamaños no pueden repetirse.');
+    setLocalError('');
+    await onSave({
+      ...catalog,
+      sizes: names,
+      products: catalog.products,
+    });
+  }
+
+  return (
+    <section className="panel cup-sizes-admin">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">PRESENTACIONES DE BEBIDAS</span>
+          <h2>Tamaños de vaso</h2>
+          <p>
+            Agrega, renombra o elimina tamaños. Cada bebida tendrá un precio independiente por cada
+            presentación.
+          </p>
+        </div>
+        <Ruler size={28} />
+      </div>
+      {localError && <p className="notice error">{localError}</p>}
+      <div className="cup-size-list">
+        {draft.map((size, index) => (
+          <div key={size.key}>
+            <span>{index + 1}</span>
+            <label>
+              Nombre del tamaño
+              <input
+                maxLength={30}
+                minLength={2}
+                required
+                value={size.name}
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current.map((item) =>
+                      item.key === size.key ? { ...item, name: event.target.value } : item,
+                    ),
+                  )
+                }
+              />
+            </label>
+            <button
+              className="small-button danger-action"
+              disabled={draft.length === 1}
+              onClick={() => void removeSize(index)}
+              type="button"
+            >
+              <Trash2 size={16} /> Eliminar
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="cup-size-add">
+        <label>
+          Nuevo tamaño
+          <input
+            maxLength={30}
+            value={newSize}
+            onChange={(event) => setNewSize(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void addSize();
+              }
+            }}
+            placeholder="Ej. Jumbo"
+          />
+        </label>
+        <button
+          className="small-button"
+          disabled={busy}
+          onClick={() => void addSize()}
+          type="button"
+        >
+          <Plus size={16} /> Agregar tamaño
+        </button>
+      </div>
+      <p className="notice">
+        Al eliminar un tamaño también se quitará su precio de todas las bebidas. Los tickets ya
+        registrados conservarán el nombre y precio originales.
+      </p>
+      <button className="button" disabled={busy} onClick={() => void saveSizes()}>
+        <Save size={17} /> Guardar tamaños
+      </button>
+    </section>
+  );
+}
+
 function ProductEditor({
   product,
+  sizes: cupSizes,
   image,
   busy,
   existing,
@@ -657,6 +841,7 @@ function ProductEditor({
   onDelete,
 }: {
   product: CatalogProduct;
+  sizes: string[];
   image: File | null;
   busy: boolean;
   existing: boolean;
@@ -748,8 +933,11 @@ function ProductEditor({
                       : product.category,
                   prices:
                     kind === 'snack' || kind === 'merch'
-                      ? [product.prices[0], product.prices[0], product.prices[0]]
-                      : product.prices,
+                      ? [product.prices[0] ?? 0]
+                      : Array.from(
+                          { length: cupSizes.length },
+                          (_, index) => product.prices[index] ?? product.prices[0] ?? 0,
+                        ),
                 });
               }}
             >
@@ -803,13 +991,13 @@ function ProductEditor({
                 value={(product.prices[0] / 100).toString()}
                 onChange={(event) => {
                   const price = Math.round(Number(event.target.value) * 100);
-                  onChange({ ...product, prices: [price, price, price] });
+                  onChange({ ...product, prices: [price] });
                 }}
               />
             </label>
           ) : (
             <div className="form-grid three">
-              {sizes.map((size, index) => (
+              {cupSizes.map((size, index) => (
                 <label className="field" key={size}>
                   {size}
                   <input

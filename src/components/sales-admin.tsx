@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   Download,
@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { PublicCatalog } from '@/lib/catalog-schema';
-import { money, sizes, standaloneExtraId, standaloneExtraProductId } from '@/lib/model';
+import { money, standaloneExtraId, standaloneExtraProductId } from '@/lib/model';
 import {
   displaySaleItem,
   receiptText,
@@ -82,6 +82,9 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
   const [expenseQuantity, setExpenseQuantity] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [editingExpense, setEditingExpense] = useState<SupplyExpense | null>(null);
+  const previousSizeSignature = useRef<string | null>(null);
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setBusy(true);
@@ -105,8 +108,22 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
   }, [load]);
 
   const products = data?.catalog.products.filter((product) => product.active) ?? [];
+  const cupSizes = data?.catalog.sizes ?? [];
+  const sizeSignature = cupSizes.join('\u0000');
   const modifiers = data?.catalog.modifiers.filter((modifier) => modifier.active !== false) ?? [];
   const lines = Object.values(cart);
+
+  useEffect(() => {
+    if (
+      previousSizeSignature.current !== null &&
+      previousSizeSignature.current !== sizeSignature &&
+      Object.keys(cartRef.current).length
+    ) {
+      setCart({});
+      setNotice('Los tamaños cambiaron. La venta abierta se vació para evitar cobrar un tamaño incorrecto.');
+    }
+    previousSizeSignature.current = sizeSignature;
+  }, [sizeSignature]);
   const orderLines = useMemo(
     () =>
       lines.flatMap((line) => {
@@ -139,13 +156,13 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
             ...line,
             key: key(line.productId, line.size),
             name: product.name,
-            sizeLabel: product.kind !== 'drink' ? 'Pieza' : sizes[line.size],
+            sizeLabel: product.kind !== 'drink' ? 'Pieza' : cupSizes[line.size],
             extras: selectedExtras,
             amount: unitPrice * line.quantity,
           },
         ];
       }),
-    [lines, modifiers, products],
+    [cupSizes, lines, modifiers, products],
   );
   const total = useMemo(() => orderLines.reduce((sum, line) => sum + line.amount, 0), [orderLines]);
   const unitCount = useMemo(
@@ -759,7 +776,7 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
               {products.map((product) => (
                 <article key={product.id}>
                   <strong>{product.name}</strong>
-                  {(product.kind !== 'drink' ? ['Pieza'] : sizes).map((size, index) => (
+                  {(product.kind !== 'drink' ? ['Pieza'] : cupSizes).map((size, index) => (
                     <button key={size} type="button" onClick={() => add(product.id, index)}>
                       <span>{size}</span>
                       <b>{money(product.prices[index])}</b>
@@ -851,7 +868,7 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
                       <div>
                         <strong>{product.name}</strong>
                         <p>
-                          {product.kind !== 'drink' ? 'Pieza' : sizes[line.size]} ·{' '}
+                          {product.kind !== 'drink' ? 'Pieza' : cupSizes[line.size]} ·{' '}
                           {money(product.prices[line.size])}
                         </p>
                       </div>

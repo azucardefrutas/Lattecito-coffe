@@ -54,6 +54,28 @@ test('10% discount uses integer cents and original price', () => {
   assert.equal(t.total, 27000);
   assert.equal(t.items[0].unitPrice, 15000);
 });
+
+test('custom cup sizes determine valid prices and the label stored on the sale', () => {
+  const product = { ...initialProducts[0], prices: [7000, 8500], cost: [0, 0] };
+  const result = calculate(
+    [product],
+    [{ productId: product.id, size: 1, quantity: 1 }],
+    0,
+    [],
+    ['Mediano', 'Grande'],
+  );
+  assert.equal(result.items[0].size, 'Grande');
+  assert.equal(result.total, 8500);
+  assert.throws(() =>
+    calculate(
+      [product],
+      [{ productId: product.id, size: 2, quantity: 1 }],
+      0,
+      [],
+      ['Mediano', 'Grande'],
+    ),
+  );
+});
 test('reject negative quantities, invalid sizes and discounts', () => {
   for (const q of [-1, 0, 100, 1.5])
     assert.throws(() =>

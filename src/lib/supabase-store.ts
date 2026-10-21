@@ -10,7 +10,7 @@ import {
   type InventoryRecipe,
   type InventoryState,
 } from './inventory-schema';
-import { calculate, sizes, standaloneExtraId, type Line, type Product } from './model';
+import { calculate, standaloneExtraId, type Line, type Product } from './model';
 import {
   dailySalesBreakdown,
   type DailySalesBreakdown,
@@ -121,19 +121,16 @@ export async function saveSupabaseCatalog(catalog: PublicCatalog, etag: string |
   if (!etag || !/^\d+$/.test(etag))
     throw new SupabaseConflictError('Actualiza el catálogo antes de guardar.');
   const parsed = catalogSchema.parse(catalog);
-  const { data, error } = await serverClient()
-    .from('catalog_state')
-    .update({ catalog: parsed, version: Number(etag) + 1, updated_at: new Date().toISOString() })
-    .eq('id', 1)
-    .eq('version', Number(etag))
-    .select('version')
-    .maybeSingle();
+  const { data, error } = await serverClient().rpc('save_catalog_with_sizes', {
+    p_catalog: parsed,
+    p_expected_version: Number(etag),
+  });
   if (error) throw databaseError('No fue posible guardar el catálogo.', error);
-  if (!data)
+  if (data === null || data === undefined)
     throw new SupabaseConflictError(
       'El menú cambió en otra pantalla. Actualiza los datos y vuelve a intentar.',
     );
-  return { etag: String(data.version) };
+  return { etag: String(data) };
 }
 
 async function readCosts() {
@@ -151,7 +148,8 @@ async function readCosts() {
 function operationalProducts(catalog: PublicCatalog, costs: Map<string, number[]>): Product[] {
   return catalog.products.map((product) => ({
     ...product,
-    cost: costs.get(product.id) ?? [0, 0, 0],
+    cost:
+      costs.get(product.id) ?? Array.from({ length: Math.max(1, product.prices.length) }, () => 0),
     stock: 0,
   }));
 }
@@ -421,7 +419,7 @@ async function quoteMobileSale(lines: Line[]) {
           unitPrice: standaloneExtra.price,
           cost: 0,
         }
-      : calculate(products, [line], 0, catalog.modifiers).items[0];
+      : calculate(products, [line], 0, catalog.modifiers, catalog.sizes).items[0];
     const product = extraId
       ? null
       : (catalog.products.find((candidate) => candidate.id === line.productId) ?? null);
@@ -586,8 +584,11 @@ export async function confirmMobileTransfer(id: string, user: MobileUser) {
 export async function updateProductCosts(productId: string, costs: number[]) {
   await ensureSupabase();
   const { catalog } = await readSupabaseCatalog();
-  if (!catalog.products.some((product) => product.id === productId))
-    throw new Error('El producto no existe.');
+  const product = catalog.products.find((candidate) => candidate.id === productId);
+  if (!product) throw new Error('El producto no existe.');
+  const expectedLength = product.kind === 'drink' ? catalog.sizes.length : 1;
+  if (costs.length !== expectedLength)
+    throw new Error('Configura un costo por cada tamaño disponible.');
   const { error } = await serverClient()
     .from('product_costs')
     .upsert({ product_id: productId, costs, updated_at: new Date().toISOString() });

@@ -2743,6 +2743,54 @@ tr:hover td {
   display: grid;
   gap: 22px;
 }
+.cup-sizes-admin {
+  display: grid;
+  gap: 20px;
+}
+.cup-sizes-admin .section-heading p {
+  max-width: 62ch;
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+.cup-size-list {
+  display: grid;
+  gap: 10px;
+}
+.cup-size-list > div {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.48);
+}
+.cup-size-list > div > span {
+  align-self: center;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--primary);
+  font-weight: 800;
+}
+.cup-size-list label,
+.cup-size-add label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.cup-size-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
 .weekly-cash-hero {
   display: flex;
   align-items: center;
@@ -3706,6 +3754,18 @@ tr:hover td {
 }
 
 @media (max-width: 760px) {
+  .cup-size-list > div,
+  .cup-size-add {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .cup-size-list > div > span {
+    display: none;
+  }
+  .cup-size-list .small-button,
+  .cup-size-add .small-button {
+    width: 100%;
+  }
   .weekly-cash-hero {
     align-items: flex-start;
   }

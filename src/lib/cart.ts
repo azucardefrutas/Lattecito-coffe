@@ -30,7 +30,7 @@ export function restoreCart(raw: unknown): { lines: Line[]; discarded: boolean }
       entry.productId.length > 80 ||
       !Number.isInteger(entry.size) ||
       entry.size < 0 ||
-      entry.size > 2 ||
+      entry.size > 9 ||
       !Number.isInteger(entry.quantity) ||
       entry.quantity < 1 ||
       entry.quantity > 99 ||
@@ -56,12 +56,17 @@ export function restoreCart(raw: unknown): { lines: Line[]; discarded: boolean }
   }
   return { lines, discarded: discarded || payload.length > 100 };
 }
-export function inspectCart(products: Product[], modifiers: MenuModifier[], lines: Line[]) {
+export function inspectCart(
+  products: Product[],
+  modifiers: MenuModifier[],
+  lines: Line[],
+  sizeLabels?: readonly string[],
+) {
   const valid: Line[] = [],
     unavailable: Line[] = [];
   for (const line of lines) {
     try {
-      calculate(products, [line], 0, modifiers);
+      calculate(products, [line], 0, modifiers, sizeLabels);
       valid.push(line);
     } catch {
       unavailable.push(line);

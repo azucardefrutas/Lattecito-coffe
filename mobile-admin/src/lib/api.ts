@@ -101,7 +101,7 @@ export type InventoryMovement = {
 };
 export type Dashboard = {
   user: AdminUser;
-  catalog: { products: Product[]; modifiers: Modifier[] };
+  catalog: { sizes: string[]; products: Product[]; modifiers: Modifier[] };
   costs: Record<string, number[]>;
   sales: Sale[];
   expenses: Expense[];

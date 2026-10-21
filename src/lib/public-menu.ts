@@ -1,8 +1,9 @@
 import type { Store } from './model.ts';
-import type { PublicCatalog } from './catalog-schema.ts';
+import { DEFAULT_CUP_SIZES, type PublicCatalog } from './catalog-schema.ts';
 
 export function publishCatalog(catalog: PublicCatalog): PublicCatalog {
   return {
+    sizes: catalog.sizes,
     products: catalog.products.filter((product) => product.active),
     modifiers: catalog.modifiers.filter((modifier) => modifier.active !== false),
     settings: catalog.settings,
@@ -12,6 +13,7 @@ export function publishCatalog(catalog: PublicCatalog): PublicCatalog {
 // Explicit allowlist: never publish stock, costs, recipes, sales or authentication.
 export function publicMenu(s: Store): PublicCatalog {
   return {
+    sizes: [...DEFAULT_CUP_SIZES],
     products: s.products
       .filter((p) => p.active)
       .map(({ id, name, kind, category, description, prices, active, tone, imageUrl }) => ({

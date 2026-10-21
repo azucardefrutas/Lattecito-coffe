@@ -207,6 +207,7 @@ export function calculate(
   lines: Line[],
   discountPercent = 0,
   modifiers: MenuModifier[] = [],
+  sizeLabels: readonly string[] = sizes,
 ) {
   if (
     !lines.length ||
@@ -222,7 +223,8 @@ export function calculate(
       !p ||
       !Number.isInteger(line.size) ||
       line.size < 0 ||
-      line.size > 2 ||
+      line.size >= p.prices.length ||
+      (p.kind !== 'snack' && p.kind !== 'merch' && line.size >= sizeLabels.length) ||
       !Number.isInteger(line.quantity) ||
       line.quantity < 1 ||
       line.quantity > 99
@@ -236,7 +238,7 @@ export function calculate(
       productName: p.name,
       sizeIndex: line.size,
       name: p.name,
-      size: p.kind === 'snack' || p.kind === 'merch' ? 'Pieza' : sizes[line.size],
+      size: p.kind === 'snack' || p.kind === 'merch' ? 'Pieza' : sizeLabels[line.size],
       quantity: line.quantity,
       baseUnitPrice: p.prices[line.size],
       extras: extras.map((extra) => ({
@@ -269,8 +271,9 @@ export function whatsappText(
   lines: Line[],
   note: string,
   modifiers: MenuModifier[] = [],
+  sizeLabels: readonly string[] = sizes,
 ) {
-  const t = calculate(products, lines, 0, modifiers);
+  const t = calculate(products, lines, 0, modifiers, sizeLabels);
   return `Hola, Lattecito Coffee. Me gustaría pedir:\n\n${t.items.map((i) => `${i.quantity} × ${i.name}${i.extras?.length ? ` + ${i.extras.map((extra) => extra.name).join(', ')}` : ''} · ${i.size}`).join('\n\n')}\n\n${note.trim() ? `Notas: ${note.trim()}\n` : ''}¿Me confirman disponibilidad y tiempo de preparación?`;
 }
 export function quoteSale(store: Store, lines: Line[], percent: number) {

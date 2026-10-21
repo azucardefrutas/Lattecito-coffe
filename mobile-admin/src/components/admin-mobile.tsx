@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import { Image } from 'expo-image';
 import * as SecureStore from 'expo-secure-store';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -34,7 +34,6 @@ import { InventoryMobile } from '@/components/inventory-mobile';
 type Tab = 'resumen' | 'caja' | 'semanal' | 'ventas' | 'gastos' | 'inventario' | 'costos';
 type CartLine = { productId: string; size: number; quantity: number; modifierIds: string[] };
 
-const sizes = ['Chico', 'Mediano', 'Grande'];
 const standaloneExtraPrefix = 'extra:';
 const standaloneExtraProductId = (modifierId: string) => `${standaloneExtraPrefix}${modifierId}`;
 const standaloneExtraId = (productId: string) =>
@@ -174,6 +173,9 @@ export function AdminMobile() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const previousSizeSignature = useRef<string | null>(null);
+  const cartRef = useRef(cart);
+  cartRef.current = cart;
 
   const logout = async () => {
     await SecureStore.deleteItemAsync('lattecito-admin-token');
@@ -190,7 +192,15 @@ export function AdminMobile() {
         Object.fromEntries(
           data.catalog.products.map((product) => [
             product.id,
-            (data.costs[product.id] ?? [0, 0, 0]).map((value) => String(value / 100)),
+            (
+              data.costs[product.id] ??
+              Array.from(
+                {
+                  length: product.kind === 'drink' ? data.catalog.sizes.length : 1,
+                },
+                () => 0,
+              )
+            ).map((value) => String(value / 100)),
           ]),
         ),
       );
@@ -208,6 +218,19 @@ export function AdminMobile() {
       await refresh(saved);
     });
   }, []);
+
+  const sizeSignature = dashboard?.catalog.sizes.join('\u0000') ?? '';
+  useEffect(() => {
+    if (
+      previousSizeSignature.current !== null &&
+      previousSizeSignature.current !== sizeSignature &&
+      Object.keys(cartRef.current).length
+    ) {
+      setCart({});
+      setError('Los tamaños cambiaron. La venta abierta se vació para evitar cobrar un tamaño incorrecto.');
+    }
+    previousSizeSignature.current = sizeSignature;
+  }, [sizeSignature]);
 
   const signIn = async () => {
     setBusy(true);
@@ -988,26 +1011,27 @@ export function AdminMobile() {
             <View key={product.id} style={styles.card}>
               <Text style={styles.cardTitle}>{product.name}</Text>
               <View style={styles.costRow}>
-                {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map(
-                  (size, index) => (
-                    <View key={size} style={styles.costField}>
-                      <Text style={styles.smallLabel}>{size}</Text>
-                      <TextInput
-                        keyboardType="decimal-pad"
-                        onChangeText={(value) =>
-                          setCostDrafts((current) => ({
-                            ...current,
-                            [product.id]: (current[product.id] ?? ['0', '0', '0']).map(
-                              (item, itemIndex) => (itemIndex === index ? value : item),
-                            ),
-                          }))
-                        }
-                        style={styles.costInput}
-                        value={costDrafts[product.id]?.[index] ?? '0'}
-                      />
-                    </View>
-                  ),
-                )}
+                {(product.kind === 'snack' || product.kind === 'merch'
+                  ? ['Pieza']
+                  : dashboard.catalog.sizes
+                ).map((size, index) => (
+                  <View key={size} style={styles.costField}>
+                    <Text style={styles.smallLabel}>{size}</Text>
+                    <TextInput
+                      keyboardType="decimal-pad"
+                      onChangeText={(value) =>
+                        setCostDrafts((current) => ({
+                          ...current,
+                          [product.id]: (current[product.id] ?? ['0', '0', '0']).map(
+                            (item, itemIndex) => (itemIndex === index ? value : item),
+                          ),
+                        }))
+                      }
+                      style={styles.costInput}
+                      value={costDrafts[product.id]?.[index] ?? '0'}
+                    />
+                  </View>
+                ))}
               </View>
               <ActionButton label="Guardar costos" onPress={() => saveCosts(product.id)} />
             </View>
@@ -1036,18 +1060,19 @@ export function AdminMobile() {
               <Text numberOfLines={2} style={styles.muted}>
                 {product.description}
               </Text>
-              {(product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map(
-                (size, index) => (
-                  <View key={size} style={styles.sizeRow}>
-                    <Text style={styles.sizeText}>
-                      {size} · {money(product.prices[index] ?? 0)}
-                    </Text>
-                    <Pressable onPress={() => addProduct(product, index)} style={styles.plus}>
-                      <Text style={styles.plusText}>+</Text>
-                    </Pressable>
-                  </View>
-                ),
-              )}
+              {(product.kind === 'snack' || product.kind === 'merch'
+                ? ['Pieza']
+                : dashboard.catalog.sizes
+              ).map((size, index) => (
+                <View key={size} style={styles.sizeRow}>
+                  <Text style={styles.sizeText}>
+                    {size} · {money(product.prices[index] ?? 0)}
+                  </Text>
+                  <Pressable onPress={() => addProduct(product, index)} style={styles.plus}>
+                    <Text style={styles.plusText}>+</Text>
+                  </Pressable>
+                </View>
+              ))}
             </View>
           </View>
         ))}
@@ -1112,7 +1137,7 @@ export function AdminMobile() {
                   <Text style={styles.muted}>
                     {product.kind === 'snack' || product.kind === 'merch'
                       ? 'Pieza'
-                      : sizes[line.size]}{' '}
+                      : dashboard.catalog.sizes[line.size]}{' '}
                     · {money(product.prices[line.size])}
                   </Text>
                 </View>

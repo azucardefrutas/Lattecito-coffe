@@ -37,7 +37,8 @@ test('the published catalog excludes internal business data and hidden products/
   assert.equal(menu.products.length, 1);
   assert.equal(menu.modifiers.length, 1);
   assert.equal(menu.products[0].prices[0], initialProducts[0].prices[0]);
-  assert.deepEqual(Object.keys(menu).sort(), ['modifiers', 'products', 'settings']);
+  assert.deepEqual(Object.keys(menu).sort(), ['modifiers', 'products', 'settings', 'sizes']);
+  assert.deepEqual(menu.sizes, ['Chico', 'Mediano', 'Grande']);
   assert.deepEqual(Object.keys(menu.products[0]).sort(), [
     'active',
     'category',
@@ -73,9 +74,10 @@ test('deployment snapshot contains only the public catalog fields and configured
 test('cloud publication keeps edited drinks and hides disabled drinks and extras', () => {
   const catalog = {
     ...snapshot,
+    sizes: ['Mediano', 'Grande'],
     products: [
-      { ...snapshot.products[0], name: 'Nuevo latte', prices: [4900, 5900, 6900] },
-      { ...snapshot.products[1], active: false },
+      { ...snapshot.products[0], name: 'Nuevo latte', prices: [5900, 6900] },
+      { ...snapshot.products[1], active: false, prices: [5900, 6900] },
     ],
     modifiers: [
       { id: 'shot', name: 'Shot extra', price: 1000, active: true },
@@ -87,7 +89,8 @@ test('cloud publication keeps edited drinks and hides disabled drinks and extras
     published.products.map((product) => product.name),
     ['Nuevo latte'],
   );
-  assert.deepEqual(published.products[0].prices, [4900, 5900, 6900]);
+  assert.deepEqual(published.sizes, ['Mediano', 'Grande']);
+  assert.deepEqual(published.products[0].prices, [5900, 6900]);
   assert.deepEqual(
     published.modifiers.map((modifier) => modifier.id),
     ['shot'],

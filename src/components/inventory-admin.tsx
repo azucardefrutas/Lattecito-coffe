@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { AlertTriangle, ArrowDownUp, Boxes, Plus, Save, UtensilsCrossed } from 'lucide-react';
 import type { PublicCatalog } from '@/lib/catalog-schema';
 import type { InventoryItem, InventoryRecipe, InventoryState, InventoryUnit } from '@/lib/inventory-schema';
-import { money, sizes } from '@/lib/model';
+import { money } from '@/lib/model';
 
 const blankItem = () => ({
   name: '',
@@ -242,7 +242,7 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
       <section className="panel">
         <div className="section-heading"><div><span className="eyebrow">DESCUENTO AUTOMÁTICO</span><h2>Recetas por producto y extra</h2></div><UtensilsCrossed size={25} /></div>
         <p>Define cuánto consume cada tamaño o pieza. Al registrar una venta, esos insumos se descuentan en una sola operación segura.</p>
-        <label className="inventory-target">Producto o extra<select value={recipeTarget} onChange={(event) => setRecipeTarget(event.target.value)}>{catalog.products.map((product) => (product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : sizes).map((size, index) => <option key={`${product.id}-${index}`} value={`product|${product.id}|${index}`}>{product.name} · {size}</option>))}{catalog.modifiers.map((modifier) => <option key={modifier.id} value={`modifier|${modifier.id}|-1`}>Extra · {modifier.name}</option>)}</select></label>
+        <label className="inventory-target">Producto o extra<select value={recipeTarget} onChange={(event) => setRecipeTarget(event.target.value)}>{catalog.products.map((product) => (product.kind === 'snack' || product.kind === 'merch' ? ['Pieza'] : catalog.sizes).map((size, index) => <option key={`${product.id}-${index}`} value={`product|${product.id}|${index}`}>{product.name} · {size}</option>))}{catalog.modifiers.map((modifier) => <option key={modifier.id} value={`modifier|${modifier.id}|-1`}>Extra · {modifier.name}</option>)}</select></label>
         <div className="recipe-list">
           {recipeDraft.map((ingredient) => {
             const item = data.items.find((candidate) => candidate.id === ingredient.itemId);

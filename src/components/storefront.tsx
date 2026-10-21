@@ -38,6 +38,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
     [reviewing, setReviewing] = useState(true),
     [menuError, setMenuError] = useState(''),
     [settings, setSettings] = useState<Settings | null>(null),
+    [cupSizes, setCupSizes] = useState<string[]>(sizes),
     [error, setError] = useState(''),
     [category, setCategory] = useState('Todos'),
     [search, setSearch] = useState('');
@@ -52,7 +53,9 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
     [phone, setPhone] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null),
     cartDialog = useRef<HTMLDialogElement>(null),
-    menuRequest = useRef(0);
+    menuRequest = useRef(0),
+    cartSizes = useRef<string[] | null>(null),
+    cartRestored = useRef(false);
   const menuFailed = Boolean(menuError);
   const loadMenu = useCallback(async (silent = false) => {
     const request = ++menuRequest.current;
@@ -66,7 +69,16 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
         throw new Error('No pudimos revisar el menú. Reintenta antes de enviar el pedido.');
       const d = await r.json();
       if (request !== menuRequest.current) return;
-      const nextProducts = d.products.map((p: Product) => ({ ...p, cost: [0, 0, 0] }));
+      const nextProducts = d.products.map((p: Product) => ({
+        ...p,
+        cost: Array.from({ length: p.prices.length }, () => 0),
+      }));
+      const nextSizes: string[] = d.sizes ?? sizes;
+      if (cartSizes.current && JSON.stringify(cartSizes.current) !== JSON.stringify(nextSizes)) {
+        setCart([]);
+        setError('Los tamaños del menú cambiaron. Arma nuevamente tu pedido para confirmarlo.');
+      }
+      cartSizes.current = nextSizes;
       setProducts(nextProducts);
       setSelected((current) => {
         if (!current) return null;
@@ -76,7 +88,27 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
           : (updated ?? null);
       });
       setModifiers(d.modifiers ?? []);
+      setCupSizes(nextSizes);
       setSettings(d.settings);
+      if (!cartRestored.current) {
+        cartRestored.current = true;
+        try {
+          const saved = JSON.parse(localStorage.getItem('latte-cart') ?? 'null');
+          const sameSizes =
+            saved?.version === 3 &&
+            JSON.stringify(saved.sizeLabels) === JSON.stringify(nextSizes) &&
+            Array.isArray(saved.lines);
+          const restored = sameSizes
+            ? restoreCart({ version: 2, lines: saved.lines })
+            : { lines: [], discarded: Boolean(saved?.lines?.length) };
+          setCart(restored.lines);
+          if (restored.discarded)
+            setError('El menú cambió. Revisa los tamaños y arma nuevamente tu pedido.');
+        } catch {
+          setError('No pudimos recuperar el pedido guardado. Puedes armar uno nuevo.');
+        }
+        setReady(true);
+      }
       setMenuError('');
     } catch (e) {
       if (request === menuRequest.current)
@@ -87,17 +119,6 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
   }, []);
   useEffect(() => {
     void loadMenu();
-    /* Cart contains only identifiers and quantities; prices always come from the menu. */
-    try {
-      const saved = JSON.parse(localStorage.getItem('latte-cart') ?? '[]');
-      const restored = restoreCart(saved);
-      setCart(restored.lines);
-      if (restored.discarded)
-        setError('Algunos artículos guardados no eran válidos. Revisa tu pedido.');
-    } catch {
-      setError('No pudimos recuperar el pedido guardado. Puedes armar uno nuevo.');
-    }
-    setReady(true);
   }, [loadMenu]);
   useEffect(() => {
     const refresh = () => {
@@ -116,11 +137,14 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
   useEffect(() => {
     if (ready)
       try {
-        localStorage.setItem('latte-cart', JSON.stringify({ version: 2, lines: cart }));
+        localStorage.setItem(
+          'latte-cart',
+          JSON.stringify({ version: 3, sizeLabels: cupSizes, lines: cart }),
+        );
       } catch {
         setError('Tu navegador no permite guardar el pedido. Mantenlo abierto hasta enviarlo.');
       }
-  }, [cart, ready]);
+  }, [cart, cupSizes, ready]);
   useEffect(() => {
     if (selected) dialog.current?.showModal();
     else dialog.current?.close();
@@ -131,8 +155,8 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
       void loadMenu();
     } else cartDialog.current?.close();
   }, [drawer, loadMenu]);
-  const { valid: validCart, unavailable } = inspectCart(products, modifiers, cart);
-  const totals = validCart.length ? calculate(products, validCart, 0, modifiers) : null;
+  const { valid: validCart, unavailable } = inspectCart(products, modifiers, cart, cupSizes);
+  const totals = validCart.length ? calculate(products, validCart, 0, modifiers, cupSizes) : null;
   const total = totals?.total ?? 0;
   const count = cart.reduce((a, l) => a + l.quantity, 0);
   function choose(p: Product) {
@@ -610,7 +634,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                 <fieldset>
                   <legend>Elige tu tamaño</legend>
                   <div className="size-options">
-                    {sizes.map((s, i) => (
+                    {cupSizes.map((s, i) => (
                       <button
                         key={s}
                         aria-pressed={size === i}
@@ -751,7 +775,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                     <div>
                       <h3>{p.name}</h3>
                       <small>
-                        {sizes[l.size]} · {money(totals!.items[index].unitPrice)} c/u
+                        {cupSizes[l.size]} · {money(totals!.items[index].unitPrice)} c/u
                       </small>
                       {!!l.modifierIds?.length && (
                         <p className="cart-extras">
@@ -818,7 +842,7 @@ export default function Storefront({ menuOnly = false }: { menuOnly?: boolean })
                 className="button full"
                 target="_blank"
                 rel="noreferrer"
-                href={`https://wa.me/${settings?.phones[phone] ?? settings?.phones[0]}?text=${encodeURIComponent(whatsappText(products, validCart, note, modifiers))}`}
+                href={`https://wa.me/${settings?.phones[phone] ?? settings?.phones[0]}?text=${encodeURIComponent(whatsappText(products, validCart, note, modifiers, cupSizes))}`}
               >
                 <MessageCircle size={19} />
                 Continuar en WhatsApp

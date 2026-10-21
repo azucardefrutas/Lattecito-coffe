@@ -27,7 +27,7 @@ export const recipeIngredientSchema = z.object({
 export const inventoryRecipeInputSchema = z.object({
   targetType: z.enum(['product', 'modifier']),
   targetId: z.string().trim().min(1).max(80),
-  sizeIndex: z.number().int().min(-1).max(2),
+  sizeIndex: z.number().int().min(-1).max(9),
   ingredients: z.array(recipeIngredientSchema).max(100),
 });
 

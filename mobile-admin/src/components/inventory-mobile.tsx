@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { sendCommand, type Dashboard, type InventoryItem } from '@/lib/api';
 
-const sizes = ['Chico', 'Mediano', 'Grande'];
 const money = (cents: number) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cents / 100);
 
@@ -40,6 +39,9 @@ export function InventoryMobile({ token, dashboard, refresh, setBusy, setError }
     [inventory.recipes, productId, sizeIndex],
   );
   useEffect(() => setRecipe(savedRecipe?.ingredients.map((item) => ({ ...item })) ?? []), [savedRecipe]);
+  useEffect(() => {
+    if (sizeIndex >= catalog.sizes.length) setSizeIndex(0);
+  }, [catalog.sizes.length, sizeIndex]);
 
   const run = async (body: object) => {
     setBusy(true);
@@ -124,7 +126,7 @@ export function InventoryMobile({ token, dashboard, refresh, setBusy, setError }
       <Text style={styles.sectionTitle}>Recetas automáticas</Text>
       <Text style={styles.copy}>Configura el consumo de cada bebida. La caja lo descontará al generar el ticket.</Text>
       <View style={styles.chips}>{catalog.products.map((product) => <Pressable key={product.id} onPress={() => setProductId(product.id)} style={[styles.chip, productId === product.id && styles.chipSelected]}><Text style={[styles.chipText, productId === product.id && styles.chipTextSelected]}>{product.name}</Text></Pressable>)}</View>
-      <View style={styles.chips}>{sizes.map((size, index) => <Pressable key={size} onPress={() => setSizeIndex(index)} style={[styles.chip, sizeIndex === index && styles.chipSelected]}><Text style={[styles.chipText, sizeIndex === index && styles.chipTextSelected]}>{size}</Text></Pressable>)}</View>
+      <View style={styles.chips}>{catalog.sizes.map((size, index) => <Pressable key={size} onPress={() => setSizeIndex(index)} style={[styles.chip, sizeIndex === index && styles.chipSelected]}><Text style={[styles.chipText, sizeIndex === index && styles.chipTextSelected]}>{size}</Text></Pressable>)}</View>
       <View style={styles.card}>
         {recipe.map((row) => { const item = inventory.items.find((candidate) => candidate.id === row.itemId); return <View key={row.itemId} style={styles.recipeRow}><Text style={styles.flex}>{item?.name ?? 'Insumo'}</Text><Text style={styles.recipeAmount}>{row.quantity} {item?.unit}</Text><Pressable onPress={() => setRecipe((current) => current.filter((entry) => entry.itemId !== row.itemId))}><Text style={styles.remove}>Quitar</Text></Pressable></View>; })}
         {!recipe.length && <Text style={styles.empty}>Sin receta configurada.</Text>}
