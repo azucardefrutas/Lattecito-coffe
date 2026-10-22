@@ -954,6 +954,7 @@ function dateDaysAgo(today: string, amount: number) {
 function aggregateShowcaseProducts(rows: Record<string, unknown>[]) {
   const products = new Map<string, ShowcaseProduct>();
   for (const row of rows) {
+    if (String(row.size).toLocaleLowerCase('es-MX') === 'extra') continue;
     const key = String(row.product_key);
     const current = products.get(key) ?? {
       key,
@@ -1104,6 +1105,14 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
   const coveragePercentage = activeProducts.length
     ? Math.round((configuredProducts / activeProducts.length) * 100)
     : 100;
+  const legacyExtras = (productResult.data ?? [])
+    .filter((row) => String(row.size).toLocaleLowerCase('es-MX') === 'extra')
+    .map((row) => ({
+      extra_key: `legacy:${String(row.product_key)}`,
+      extra_name: row.product_name,
+      quantity: row.quantity,
+      amount: row.amount,
+    }));
 
   return {
     generatedAt: new Date().toISOString(),
@@ -1117,7 +1126,7 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
     metrics,
     days,
     products: aggregateShowcaseProducts(productResult.data ?? []),
-    extras: aggregateShowcaseExtras(extraResult.data ?? []),
+    extras: aggregateShowcaseExtras([...(extraResult.data ?? []), ...legacyExtras]),
     inventory: {
       items: inventory.items
         .filter((item) => item.active)
