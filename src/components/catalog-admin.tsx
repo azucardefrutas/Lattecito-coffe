@@ -7,6 +7,7 @@ import {
   Coffee,
   ImagePlus,
   LayoutDashboard,
+  LockKeyhole,
   PackageOpen,
   Plus,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   Save,
   Settings2,
   ShieldCheck,
+  Share2,
   Sparkles,
   Trash2,
   Users,
@@ -29,6 +31,9 @@ import { formatBusinessHours, parseBusinessHours } from '@/lib/business-hours';
 import InventoryAdmin from '@/components/inventory-admin';
 import SalesAdmin from '@/components/sales-admin';
 import WeeklyCashAdmin from '@/components/weekly-cash-admin';
+import FinanceDashboard from '@/components/finance-dashboard';
+import ShowcaseManager from '@/components/showcase-manager';
+import SystemHealth from '@/components/system-health';
 
 type View =
   | 'summary'
@@ -39,6 +44,7 @@ type View =
   | 'extras'
   | 'inventory'
   | 'business'
+  | 'showcase'
   | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
 const isUnitProduct = (kind: CatalogProduct['kind']) => kind === 'snack' || kind === 'merch';
@@ -339,11 +345,28 @@ export default function CatalogAdmin() {
             onClick={() => setView('business')}
           />
           <Nav
+            active={view === 'showcase'}
+            icon={<Share2 />}
+            label="Modo lectura"
+            onClick={() => setView('showcase')}
+          />
+          <Nav
             active={view === 'permissions'}
             icon={<Users />}
             label="Permisos"
             onClick={() => setView('permissions')}
           />
+          <button
+            aria-disabled="true"
+            className="nav-locked"
+            disabled
+            title="Se habilitará más adelante"
+          >
+            <LockKeyhole />
+            <span>
+              Capturas <small>Privado · próximamente</small>
+            </span>
+          </button>
         </nav>
         <div className="catalog-session">
           <p>
@@ -375,7 +398,9 @@ export default function CatalogAdmin() {
                             ? 'Inventario'
                             : view === 'business'
                               ? 'Datos del negocio'
-                              : 'Permisos'}
+                              : view === 'showcase'
+                                ? 'Modo lectura'
+                                : 'Permisos'}
             </h1>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
@@ -399,42 +424,11 @@ export default function CatalogAdmin() {
         )}
 
         {view === 'summary' && (
-          <>
-            <section className="summary-grid">
-              <article className="metric-card">
-                <span>PRODUCTOS</span>
-                <strong>{catalog.products.length}</strong>
-                <small>
-                  {catalog.products.filter((item) => item.kind === 'drink').length} bebidas ·{' '}
-                  {catalog.products.filter((item) => item.kind === 'snack').length} snacks ·{' '}
-                  {catalog.products.filter((item) => item.kind === 'merch').length} merch
-                </small>
-              </article>
-              <article className="metric-card">
-                <span>EXTRAS</span>
-                <strong>{catalog.modifiers.length}</strong>
-                <small>
-                  {catalog.modifiers.filter((item) => item.active !== false).length} disponibles
-                </small>
-              </article>
-              <article className="metric-card">
-                <span>FOTOGRAFÍAS</span>
-                <strong>{catalog.products.filter((item) => item.imageUrl).length}</strong>
-                <small>de {catalog.products.length} productos</small>
-              </article>
-            </section>
-            <section className="panel">
-              <span className="eyebrow">CONTROL DEL SITIO</span>
-              <h2>Todo lo que publiques aparece en el menú</h2>
-              <p>
-                Edita bebidas, snacks, merch, precios, fotografías, extras, teléfonos, dirección y
-                horarios. Puedes ocultar un producto sin borrar su información.
-              </p>
-              <button className="button" onClick={() => setView('products')}>
-                Administrar menú
-              </button>
-            </section>
-          </>
+          <FinanceDashboard
+            onOpenInventory={() => setView('inventory')}
+            onOpenSales={() => setView('sales')}
+            onOpenShowcase={() => setView('showcase')}
+          />
         )}
 
         {view === 'sales' && <SalesAdmin onManageExtras={() => setView('extras')} />}
@@ -576,6 +570,8 @@ export default function CatalogAdmin() {
 
         {view === 'inventory' && <InventoryAdmin catalog={catalog} />}
 
+        {view === 'showcase' && <ShowcaseManager />}
+
         {view === 'permissions' && <PermissionsPanel />}
       </main>
 
@@ -612,38 +608,42 @@ export default function CatalogAdmin() {
 
 function PermissionsPanel() {
   return (
-    <section className="panel">
-      <span className="eyebrow">ACCESO AL ADMINISTRADOR</span>
-      <h2>Perfiles definidos</h2>
-      <p className="permissions-intro">
-        El acceso en línea usa cuentas privadas y contraseñas cifradas configuradas fuera del
-        código.
-      </p>
-      <div className="permission-grid">
-        <article>
-          <Users size={22} />
-          <div>
-            <strong>Administrador del catálogo</strong>
-            <span>3 cuentas documentadas</span>
-            <p>
-              Puede registrar ventas, generar comprobantes, editar el menú, inventario y recetas.
-            </p>
-          </div>
-        </article>
-        <article>
-          <ShieldCheck size={22} />
-          <div>
-            <strong>Desarrollador</strong>
-            <span>1 cuenta documentada</span>
-            <p>Acceso técnico completo al proyecto, despliegues, almacenamiento y configuración.</p>
-          </div>
-        </article>
-      </div>
-      <p className="notice">
-        Las contraseñas no se publican en GitHub ni se envían al navegador. El servidor valida cada
-        sesión y protege los datos de administración.
-      </p>
-    </section>
+    <div className="permissions-stack">
+      <SystemHealth />
+      <section className="panel">
+        <span className="eyebrow">ACCESO AL ADMINISTRADOR</span>
+        <h2>Perfiles definidos</h2>
+        <p className="permissions-intro">
+          El acceso en línea usa cuentas privadas y contraseñas cifradas configuradas fuera del
+          código.
+        </p>
+        <div className="permission-grid">
+          <article>
+            <Users size={22} />
+            <div>
+              <strong>Administrador del negocio</strong>
+              <span>Operación diaria</span>
+              <p>
+                Registra ventas, genera comprobantes y administra menú, costos, inventario y
+                recetas.
+              </p>
+            </div>
+          </article>
+          <article>
+            <ShieldCheck size={22} />
+            <div>
+              <strong>Desarrollador</strong>
+              <span>Configuración técnica</span>
+              <p>Gestiona despliegues, almacenamiento, seguridad y salud del sistema.</p>
+            </div>
+          </article>
+        </div>
+        <p className="notice">
+          Las contraseñas no se publican en GitHub ni se envían al navegador. El servidor valida
+          cada sesión.
+        </p>
+      </section>
+    </div>
   );
 }
 

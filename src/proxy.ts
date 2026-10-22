@@ -13,7 +13,9 @@ export function proxy(req: NextRequest) {
       p === '/catalog-admin' ||
       p.startsWith('/catalog-admin/') ||
       p === '/api/catalog-admin' ||
-      p.startsWith('/api/catalog-admin/'))
+      p.startsWith('/api/catalog-admin/') ||
+      p === '/lectura' ||
+      p.startsWith('/lectura/'))
   )
     return new NextResponse('No encontrado', { status: 404 });
   if (admin) {
@@ -31,6 +33,7 @@ export function proxy(req: NextRequest) {
     if (
       !p.startsWith('/catalog-admin') &&
       !p.startsWith('/api/catalog-admin') &&
+      !p.startsWith('/lectura') &&
       !p.startsWith('/_next') &&
       !p.includes('.')
     )

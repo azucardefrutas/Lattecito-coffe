@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dailySalesBreakdown, receiptText, type SaleForSummary } from '../src/lib/sales-summary.ts';
-import { createCashReportPdf } from '../src/lib/cash-report-pdf.ts';
+import { createCashReportPdf, createSaleReceiptPdf } from '../src/lib/cash-report-pdf.ts';
 import { standaloneExtraId, standaloneExtraProductId } from '../src/lib/model.ts';
 import { expenseTotal, mergeFinancialHistory } from '../src/lib/expenses.ts';
 
@@ -147,6 +147,21 @@ test('cash report generator returns a complete PDF document', () => {
   assert.match(text, /CORTE DE CAJA/);
   assert.match(text, /Tickets registrados/);
   assert.match(text, /Gastos de insumos/);
+  assert.match(text, /%%EOF\s*$/);
+});
+
+test('ticket PDF includes every product, quantity, price and margin formula', () => {
+  const pdf = createSaleReceiptPdf({
+    ...sales[0],
+    cost: 4000,
+  });
+  const text = new TextDecoder('windows-1252').decode(pdf);
+  assert.match(text, /2/);
+  assert.match(text, /Latte matcha/);
+  assert.match(text, /P\. UNITARIO/);
+  assert.match(text, /Shot extra/);
+  assert.match(text, /UTILIDAD BRUTA/);
+  assert.match(text, /MARGEN/);
   assert.match(text, /%%EOF\s*$/);
 });
 

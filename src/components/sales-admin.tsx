@@ -23,7 +23,11 @@ import {
   type DailySalesBreakdown,
   type SaleForSummary,
 } from '@/lib/sales-summary';
-import { createCashReportPdf, type CashReportDay } from '@/lib/cash-report-pdf';
+import {
+  createCashReportPdf,
+  createSaleReceiptPdf,
+  type CashReportDay,
+} from '@/lib/cash-report-pdf';
 import type { SupplyExpense } from '@/lib/expenses';
 
 type Sale = SaleForSummary & {
@@ -41,6 +45,8 @@ type HistoryDay = {
   cost: number;
   expenses: number;
   net: number;
+  products?: Array<{ name: string; size: string; quantity: number; amount: number }>;
+  extras?: Array<{ name: string; quantity: number; amount: number }>;
 };
 type Dashboard = {
   catalog: PublicCatalog;
@@ -120,7 +126,9 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
       Object.keys(cartRef.current).length
     ) {
       setCart({});
-      setNotice('Los tamaños cambiaron. La venta abierta se vació para evitar cobrar un tamaño incorrecto.');
+      setNotice(
+        'Los tamaños cambiaron. La venta abierta se vació para evitar cobrar un tamaño incorrecto.',
+      );
     }
     previousSizeSignature.current = sizeSignature;
   }, [sizeSignature]);
@@ -462,6 +470,20 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
     const link = document.createElement('a');
     link.href = url;
     link.download = `lattecito-corte-caja-${day.date}.pdf`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
+  function downloadSalePdf(sale: Sale) {
+    const bytes = createSaleReceiptPdf(sale);
+    const file = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer;
+    const url = URL.createObjectURL(new Blob([file], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lattecito-ticket-${sale.number}.pdf`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
@@ -1068,6 +1090,13 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
                       </button>
                       <button
                         className="small-button"
+                        onClick={() => downloadSalePdf(sale)}
+                        type="button"
+                      >
+                        <Download size={14} /> PDF
+                      </button>
+                      <button
+                        className="small-button"
                         disabled={busy}
                         onClick={() => editSale(sale)}
                         type="button"
@@ -1160,7 +1189,14 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
                     </small>
                   ))}
                 </div>
-                <strong>{money(item.unitPrice * item.quantity)}</strong>
+                <strong>
+                  {money(
+                    (item.baseUnitPrice ??
+                      item.unitPrice -
+                        (item.extras ?? []).reduce((sum, extra) => sum + extra.unitPrice, 0)) *
+                      item.quantity,
+                  )}
+                </strong>
               </div>
             ))}
             <hr />
@@ -1171,6 +1207,26 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
             <p>
               {receipt.payment} · {receipt.paymentStatus}
             </p>
+            <div className="receipt-profit">
+              <span>
+                <b>Costo registrado</b>
+                <strong>{receipt.cost > 0 ? money(receipt.cost) : 'Pendiente'}</strong>
+              </span>
+              <span>
+                <b>Utilidad bruta</b>
+                <strong>
+                  {receipt.cost > 0 ? money(receipt.total - receipt.cost) : 'Pendiente'}
+                </strong>
+              </span>
+              <span>
+                <b>Margen</b>
+                <strong>
+                  {receipt.cost > 0 && receipt.total > 0
+                    ? `${Math.round(((receipt.total - receipt.cost) / receipt.total) * 1000) / 10}%`
+                    : 'Pendiente'}
+                </strong>
+              </span>
+            </div>
             {receipt.payment === 'Efectivo' && (
               <p>
                 Recibido: {money(receipt.received)} · Cambio: {money(receipt.change)}
@@ -1184,6 +1240,9 @@ export default function SalesAdmin({ onManageExtras }: { onManageExtras: () => v
               </button>
               <button className="small-button" onClick={() => void shareSale(receipt)}>
                 <Share2 size={16} /> Compartir
+              </button>
+              <button className="small-button" onClick={() => downloadSalePdf(receipt)}>
+                <Download size={16} /> Descargar PDF
               </button>
               <button className="small-button" onClick={() => setReceipt(null)}>
                 Cerrar

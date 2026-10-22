@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import snapshot from '@/data/public-menu.json';
 import { catalogSchema, type PublicCatalog } from './catalog-schema';
 import {
@@ -24,6 +25,13 @@ import {
   type SupplyExpense,
 } from './expenses';
 import { buildWeeklyCashSummary, businessWeekStart, type WeeklyCashExpense } from './weekly-cash';
+import { buildProfitMetrics } from './business-analytics';
+import type {
+  ShowcaseDashboard,
+  ShowcaseExtra,
+  ShowcaseLinkStatus,
+  ShowcaseProduct,
+} from './showcase';
 
 type UserRole = 'admin' | 'developer';
 
@@ -52,6 +60,7 @@ export type MobileSale = {
 export type ArchivedSalesDay = FinancialHistoryDay;
 
 export class SupabaseConflictError extends Error {}
+export class ShowcaseLinkError extends Error {}
 
 let ready: Promise<void> | null = null;
 
@@ -753,7 +762,14 @@ export async function readMobileDashboard() {
     month: '2-digit',
     day: '2-digit',
   }).format(weekStart);
-  const [result, historyResult, expenseResult, weeklyExpenseResult] = await Promise.all([
+  const [
+    result,
+    historyResult,
+    expenseResult,
+    weeklyExpenseResult,
+    productHistoryResult,
+    extraHistoryResult,
+  ] = await Promise.all([
     client
       .from('admin_sales')
       .select('*')
@@ -777,6 +793,14 @@ export async function readMobileDashboard() {
       .select('*')
       .eq('week_start', currentWeekStart)
       .order('created_at', { ascending: false }),
+    client
+      .from('daily_product_totals')
+      .select('business_date, product_name, size, quantity, amount')
+      .gte('business_date', weekStartDate),
+    client
+      .from('daily_extra_totals')
+      .select('business_date, extra_name, quantity, amount')
+      .gte('business_date', weekStartDate),
   ]);
   if (result.error) throw databaseError('No fue posible leer las ventas del día.', result.error);
   if (historyResult.error)
@@ -785,6 +809,11 @@ export async function readMobileDashboard() {
     throw databaseError('No fue posible leer los gastos de insumos.', expenseResult.error);
   if (weeklyExpenseResult.error)
     throw databaseError('No fue posible leer los gastos semanales.', weeklyExpenseResult.error);
+  if (productHistoryResult.error || extraHistoryResult.error)
+    throw databaseError(
+      'No fue posible leer el detalle histórico.',
+      productHistoryResult.error ?? extraHistoryResult.error,
+    );
   const sales = (result.data ?? []).map((row) => saleFromRow(row));
   const weekExpenses = (expenseResult.data ?? []).map((row) => expenseFromRow(row));
   const expenses = weekExpenses.filter((expense) => expense.businessDate === today);
@@ -795,15 +824,38 @@ export async function readMobileDashboard() {
   const missingCostCount = catalog.products.filter(
     (product) => product.active && !(costs.get(product.id) ?? []).some((cost) => cost > 0),
   ).length;
-  const salesHistory = (historyResult.data ?? []).map((row) => ({
-    date: String(row.business_date),
-    tickets: Number(row.ticket_count),
-    total: Number(row.paid_total),
-    cash: Number(row.cash_total),
-    transfers: Number(row.transfer_total),
-    pendingTransfers: Number(row.pending_total),
-    cost: Number(row.cost_total),
-  })) satisfies SalesHistoryDay[];
+  const salesHistory = (historyResult.data ?? []).map((row) => {
+    const date = String(row.business_date);
+    return {
+      date,
+      tickets: Number(row.ticket_count),
+      total: Number(row.paid_total),
+      cash: Number(row.cash_total),
+      transfers: Number(row.transfer_total),
+      pendingTransfers: Number(row.pending_total),
+      cost: Number(row.cost_total),
+      products: (productHistoryResult.data ?? [])
+        .filter((item) => String(item.business_date) === date)
+        .map((item) => ({
+          name: String(item.product_name),
+          size: String(item.size),
+          quantity: Number(item.quantity),
+          amount: Number(item.amount),
+        })),
+      extras: (extraHistoryResult.data ?? [])
+        .filter((item) => String(item.business_date) === date)
+        .map((item) => ({
+          name: String(item.extra_name),
+          quantity: Number(item.quantity),
+          amount: Number(item.amount),
+        })),
+    };
+  }) satisfies Array<
+    SalesHistoryDay & {
+      products: Array<{ name: string; size: string; quantity: number; amount: number }>;
+      extras: Array<{ name: string; quantity: number; amount: number }>;
+    }
+  >;
   const weeklyCash = buildWeeklyCashSummary({
     today,
     salesDays: salesHistory,
@@ -831,6 +883,322 @@ export async function readMobileDashboard() {
       missingCostCount,
       tickets: daily.tickets,
     },
+  };
+}
+
+function showcaseLinkFromRow(row: Record<string, unknown>): ShowcaseLinkStatus {
+  const expiresAt = new Date(String(row.expires_at)).toISOString();
+  const revokedAt = row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : '';
+  return {
+    id: String(row.id),
+    expiresAt,
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    createdBy: String(row.created_by),
+    revokedAt,
+    viewCount: Number(row.view_count),
+    lastViewedAt: row.last_viewed_at ? new Date(String(row.last_viewed_at)).toISOString() : '',
+    active: !revokedAt && new Date(expiresAt).getTime() > Date.now(),
+  };
+}
+
+export async function listShowcaseLinks() {
+  await ensureSupabase();
+  const { data, error } = await serverClient()
+    .from('showcase_links')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) throw databaseError('No fue posible leer los enlaces de exposición.', error);
+  return (data ?? []).map((row) => showcaseLinkFromRow(row));
+}
+
+export async function createShowcaseLink(durationDays: number, user: MobileUser) {
+  await ensureSupabase();
+  if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 180)
+    throw new Error('La vigencia debe estar entre uno y ciento ochenta días.');
+  const id = randomUUID();
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + durationDays * 86_400_000).toISOString();
+  const { data, error } = await serverClient().rpc('create_showcase_link', {
+    p_id: id,
+    p_token_hash: tokenHash,
+    p_expires_at: expiresAt,
+    p_created_by: user.username,
+  });
+  if (error || !data) throw databaseError('No fue posible crear el enlace de exposición.', error);
+  const row = Array.isArray(data) ? data[0] : data;
+  return { link: showcaseLinkFromRow(row as Record<string, unknown>), token };
+}
+
+export async function revokeShowcaseLink(id: string) {
+  await ensureSupabase();
+  const { data, error } = await serverClient()
+    .from('showcase_links')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('revoked_at', null)
+    .select('*')
+    .maybeSingle();
+  if (error) throw databaseError('No fue posible revocar el enlace.', error);
+  if (!data) throw new Error('El enlace ya estaba vencido o revocado.');
+  return showcaseLinkFromRow(data);
+}
+
+function dateDaysAgo(today: string, amount: number) {
+  const value = new Date(`${today}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() - amount);
+  return value.toISOString().slice(0, 10);
+}
+
+function aggregateShowcaseProducts(rows: Record<string, unknown>[]) {
+  const products = new Map<string, ShowcaseProduct>();
+  for (const row of rows) {
+    const key = String(row.product_key);
+    const current = products.get(key) ?? {
+      key,
+      name: String(row.product_name),
+      size: String(row.size),
+      quantity: 0,
+      amount: 0,
+    };
+    current.quantity += Number(row.quantity);
+    current.amount += Number(row.amount);
+    products.set(key, current);
+  }
+  return [...products.values()].sort((a, b) => b.amount - a.amount || b.quantity - a.quantity);
+}
+
+function aggregateShowcaseExtras(rows: Record<string, unknown>[]) {
+  const extras = new Map<string, ShowcaseExtra>();
+  for (const row of rows) {
+    const key = String(row.extra_key);
+    const current = extras.get(key) ?? {
+      key,
+      name: String(row.extra_name),
+      quantity: 0,
+      amount: 0,
+    };
+    current.quantity += Number(row.quantity);
+    current.amount += Number(row.amount);
+    extras.set(key, current);
+  }
+  return [...extras.values()].sort((a, b) => b.amount - a.amount || b.quantity - a.quantity);
+}
+
+export async function readShowcaseDashboard(token: string): Promise<ShowcaseDashboard> {
+  await ensureSupabase();
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ShowcaseLinkError('Enlace no válido.');
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const client = serverClient();
+  const viewResult = await client.rpc('record_showcase_view', { p_token_hash: tokenHash });
+  if (viewResult.error) throw databaseError('No fue posible validar el enlace.', viewResult.error);
+  const viewRow = Array.isArray(viewResult.data) ? viewResult.data[0] : viewResult.data;
+  if (!viewRow) throw new ShowcaseLinkError('Este enlace venció o fue revocado.');
+
+  const today = cancunBusinessDate();
+  const periodStart = dateDaysAgo(today, 29);
+  const [
+    { catalog },
+    costs,
+    inventory,
+    daysResult,
+    productResult,
+    extraResult,
+    expenseResult,
+    weeklyExpenseResult,
+  ] = await Promise.all([
+    readSupabaseCatalog(),
+    readCosts(),
+    readInventoryState(),
+    client
+      .from('daily_sales_totals')
+      .select('business_date, ticket_count, paid_total, cost_total')
+      .gte('business_date', periodStart)
+      .lte('business_date', today)
+      .order('business_date'),
+    client
+      .from('daily_product_totals')
+      .select('product_key, product_name, size, quantity, amount')
+      .gte('business_date', periodStart)
+      .lte('business_date', today),
+    client
+      .from('daily_extra_totals')
+      .select('extra_key, extra_name, quantity, amount')
+      .gte('business_date', periodStart)
+      .lte('business_date', today),
+    client
+      .from('supply_expenses')
+      .select('business_date, total')
+      .gte('business_date', periodStart)
+      .lte('business_date', today),
+    client
+      .from('weekly_cash_expenses')
+      .select('total')
+      .gte('week_start', businessWeekStart(periodStart))
+      .lte('week_start', businessWeekStart(today)),
+  ]);
+
+  for (const result of [daysResult, productResult, extraResult, expenseResult, weeklyExpenseResult])
+    if (result.error)
+      throw databaseError('No fue posible preparar el informe de lectura.', result.error);
+
+  const expensesByDate = new Map<string, number>();
+  for (const row of expenseResult.data ?? []) {
+    const date = String(row.business_date);
+    expensesByDate.set(date, (expensesByDate.get(date) ?? 0) + Number(row.total));
+  }
+  const days = (daysResult.data ?? []).map((row) => {
+    const sales = Number(row.paid_total);
+    const cost = Number(row.cost_total);
+    const expenses = expensesByDate.get(String(row.business_date)) ?? 0;
+    return {
+      date: String(row.business_date),
+      tickets: Number(row.ticket_count),
+      sales,
+      cost,
+      expenses,
+      net: sales - cost - expenses,
+    };
+  });
+  const weeklyExpenses = (weeklyExpenseResult.data ?? []).reduce(
+    (sum, row) => sum + Number(row.total),
+    0,
+  );
+  const metrics = buildProfitMetrics(
+    days.map((day) => ({
+      date: day.date,
+      tickets: day.tickets,
+      total: day.sales,
+      cost: day.cost,
+      expenses: day.expenses,
+    })),
+    weeklyExpenses,
+  );
+
+  const activeProducts = catalog.products.filter((product) => product.active);
+  const itemById = new Map(inventory.items.map((item) => [item.id, item]));
+  const missingProducts = activeProducts
+    .filter((product) => {
+      const requiredSizes = product.kind === 'drink' ? catalog.sizes.map((_, index) => index) : [0];
+      return requiredSizes.some((sizeIndex) => {
+        if ((costs.get(product.id)?.[sizeIndex] ?? 0) > 0) return false;
+        const recipe = inventory.recipes.find(
+          (entry) =>
+            entry.targetType === 'product' &&
+            entry.targetId === product.id &&
+            entry.sizeIndex === sizeIndex,
+        );
+        return (
+          !recipe?.ingredients.length ||
+          recipe.ingredients.some(
+            (ingredient) => (itemById.get(ingredient.itemId)?.costPerUnit ?? 0) <= 0,
+          )
+        );
+      });
+    })
+    .map((product) => product.name);
+  const daysWithSales = days.filter((day) => day.sales > 0).length;
+  const daysWithRecordedCost = days.filter((day) => day.sales > 0 && day.cost > 0).length;
+  const configuredProducts = activeProducts.length - missingProducts.length;
+  const coveragePercentage = activeProducts.length
+    ? Math.round((configuredProducts / activeProducts.length) * 100)
+    : 100;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    expiresAt: new Date(String(viewRow.expires_at)).toISOString(),
+    business: {
+      name: 'Lattecito Coffee',
+      hours: catalog.settings.hours,
+      sample: catalog.settings.sample,
+    },
+    period: { start: periodStart, end: today, days: 30 },
+    metrics,
+    days,
+    products: aggregateShowcaseProducts(productResult.data ?? []),
+    extras: aggregateShowcaseExtras(extraResult.data ?? []),
+    inventory: {
+      items: inventory.items
+        .filter((item) => item.active)
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          unit: item.unit,
+          stock: item.stock,
+          minimum: item.minimum,
+          costPerUnit: item.costPerUnit,
+          value: Math.round(item.stock * item.costPerUnit),
+          status: item.stock <= item.minimum ? ('Stock crítico' as const) : ('Disponible' as const),
+        })),
+      value: inventory.summary.inventoryValue,
+      lowStockCount: inventory.summary.lowStockCount,
+    },
+    coverage: {
+      configuredProducts,
+      totalProducts: activeProducts.length,
+      percentage: coveragePercentage,
+      missingProducts,
+      recipes: inventory.summary.configuredRecipes,
+      inventoryItems: inventory.summary.itemCount,
+      daysWithSales,
+      daysWithRecordedCost,
+      reliable:
+        missingProducts.length === 0 &&
+        (daysWithSales === 0 || daysWithRecordedCost === daysWithSales),
+    },
+    views: Number(viewRow.view_count),
+  };
+}
+
+export async function readSystemHealth() {
+  await ensureSupabase();
+  const startedAt = performance.now();
+  const client = serverClient();
+  const today = cancunBusinessDate();
+  const [catalogResult, salesResult, inventoryResult, recipeResult, costResult, shareResult] =
+    await Promise.all([
+      client.from('catalog_state').select('version, updated_at').eq('id', 1).single(),
+      client
+        .from('admin_sales')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_date', today),
+      client.from('inventory_items').select('id', { count: 'exact', head: true }),
+      client.from('inventory_recipes').select('target_id', { count: 'exact', head: true }),
+      client.from('product_costs').select('product_id', { count: 'exact', head: true }),
+      client
+        .from('showcase_links')
+        .select('id', { count: 'exact', head: true })
+        .is('revoked_at', null)
+        .gt('expires_at', new Date().toISOString()),
+    ]);
+  const results = [
+    catalogResult,
+    salesResult,
+    inventoryResult,
+    recipeResult,
+    costResult,
+    shareResult,
+  ];
+  if (results.some((result) => result.error))
+    throw databaseError(
+      'No fue posible completar el diagnóstico.',
+      results.find((result) => result.error)?.error ?? null,
+    );
+  const latencyMs = Math.max(1, Math.round(performance.now() - startedAt));
+  return {
+    status: latencyMs < 1_500 ? 'Saludable' : 'Lento',
+    latencyMs,
+    checkedAt: new Date().toISOString(),
+    catalogVersion: Number(catalogResult.data?.version ?? 0),
+    catalogUpdatedAt: catalogResult.data?.updated_at
+      ? new Date(String(catalogResult.data.updated_at)).toISOString()
+      : '',
+    salesToday: salesResult.count ?? 0,
+    inventoryItems: inventoryResult.count ?? 0,
+    recipes: recipeResult.count ?? 0,
+    productCosts: costResult.count ?? 0,
+    activeShowcaseLinks: shareResult.count ?? 0,
   };
 }
 
