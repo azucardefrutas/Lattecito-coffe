@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Coffee, Expand, Images, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Coffee, Expand, X } from 'lucide-react';
 import {
   galleryCategories,
   galleryCategoryLabels,
@@ -51,29 +51,6 @@ export default function GalleryView({ items }: { items: PublicGalleryItem[] }) {
 
   return (
     <main className="public-gallery-page">
-      <header className="public-gallery-hero">
-        <a className="public-gallery-back" href="/">
-          <ArrowLeft size={17} /> Ver menú
-        </a>
-        <div className="public-gallery-brand">
-          <span className="showcase-logo">lattecito</span>
-          <span>coffee</span>
-        </div>
-        <div className="public-gallery-heading">
-          <span className="eyebrow">GALERÍA DEL PROYECTO</span>
-          <h1>Momentos que cuentan nuestra historia.</h1>
-          <p>
-            Un vistazo al local, nuestras bebidas, los alimentos y el trabajo detrás de Lattecito
-            Coffee.
-          </p>
-        </div>
-        <div className="public-gallery-count">
-          <Images size={22} />
-          <strong>{items.length}</strong>
-          <span>fotografías publicadas</span>
-        </div>
-      </header>
-
       {items.length > 0 && (
         <nav className="public-gallery-filters" aria-label="Filtrar fotografías">
           <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>
