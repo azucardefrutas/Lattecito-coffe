@@ -32,6 +32,7 @@ import type {
   ShowcaseLinkStatus,
   ShowcaseProduct,
 } from './showcase';
+import type { GalleryCategory, GalleryItem } from './gallery-schema';
 
 type UserRole = 'admin' | 'developer';
 
@@ -1264,4 +1265,163 @@ export async function uploadProductImage(image: File, extension: string) {
     });
   if (error) throw databaseError('No fue posible subir la imagen.', error);
   return client.storage.from('product-images').getPublicUrl(path).data.publicUrl;
+}
+
+const GALLERY_BUCKET = 'gallery-images';
+
+function galleryItemFromRow(
+  row: Record<string, unknown>,
+  client: ReturnType<typeof serverClient>,
+): GalleryItem {
+  return {
+    id: String(row.id),
+    imageUrl: client.storage.from(GALLERY_BUCKET).getPublicUrl(String(row.storage_path)).data
+      .publicUrl,
+    title: String(row.title),
+    description: String(row.description ?? ''),
+    altText: String(row.alt_text),
+    category: String(row.category) as GalleryCategory,
+    width: Number(row.width),
+    height: Number(row.height),
+    sortOrder: Number(row.sort_order),
+    published: Boolean(row.published),
+    createdBy: String(row.created_by),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+  };
+}
+
+export async function listGalleryItems(publicOnly = false): Promise<GalleryItem[]> {
+  await ensureSupabase();
+  const client = serverClient();
+  let query = client
+    .from('gallery_items')
+    .select(
+      'id, storage_path, title, description, alt_text, category, width, height, sort_order, published, created_by, created_at, updated_at',
+    )
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: false });
+  if (publicOnly) query = query.eq('published', true);
+  const { data, error } = await query;
+  if (error) throw databaseError('No fue posible leer la galería.', error);
+  return (data ?? []).map((row) => galleryItemFromRow(row, client));
+}
+
+export async function uploadGalleryItem(
+  image: File,
+  extension: string,
+  input: {
+    title: string;
+    description: string;
+    altText: string;
+    category: GalleryCategory;
+    width: number;
+    height: number;
+    published: boolean;
+  },
+  user: MobileUser,
+) {
+  await ensureSupabase();
+  const client = serverClient();
+  const id = randomUUID();
+  const path = `gallery/${id}.${extension}`;
+  const upload = await client.storage.from(GALLERY_BUCKET).upload(path, await image.arrayBuffer(), {
+    contentType: image.type,
+    cacheControl: '31536000',
+    upsert: false,
+  });
+  if (upload.error) throw databaseError('No fue posible subir la foto.', upload.error);
+
+  const last = await client
+    .from('gallery_items')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (last.error) {
+    await client.storage.from(GALLERY_BUCKET).remove([path]);
+    throw databaseError('No fue posible ordenar la galería.', last.error);
+  }
+  const { data, error } = await client
+    .from('gallery_items')
+    .insert({
+      id,
+      storage_path: path,
+      title: input.title,
+      description: input.description,
+      alt_text: input.altText,
+      category: input.category,
+      width: input.width,
+      height: input.height,
+      sort_order: Number(last.data?.sort_order ?? -1) + 1,
+      published: input.published,
+      created_by: user.username,
+    })
+    .select()
+    .single();
+  if (error || !data) {
+    await client.storage.from(GALLERY_BUCKET).remove([path]);
+    throw databaseError('No fue posible guardar la foto en la galería.', error);
+  }
+  return galleryItemFromRow(data, client);
+}
+
+export async function updateGalleryItem(input: {
+  id: string;
+  title: string;
+  description: string;
+  altText: string;
+  category: GalleryCategory;
+  sortOrder: number;
+  published: boolean;
+}) {
+  await ensureSupabase();
+  const client = serverClient();
+  const { data, error } = await client
+    .from('gallery_items')
+    .update({
+      title: input.title,
+      description: input.description,
+      alt_text: input.altText,
+      category: input.category,
+      sort_order: input.sortOrder,
+      published: input.published,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.id)
+    .select()
+    .single();
+  if (error || !data) throw databaseError('No fue posible actualizar la foto.', error);
+  return galleryItemFromRow(data, client);
+}
+
+export async function reorderGalleryItems(ids: string[]) {
+  await ensureSupabase();
+  const client = serverClient();
+  for (const [sortOrder, id] of ids.entries()) {
+    const { error } = await client
+      .from('gallery_items')
+      .update({ sort_order: sortOrder, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw databaseError('No fue posible guardar el orden de las fotos.', error);
+  }
+  return listGalleryItems();
+}
+
+export async function deleteGalleryItem(id: string) {
+  await ensureSupabase();
+  const client = serverClient();
+  const current = await client
+    .from('gallery_items')
+    .select('storage_path')
+    .eq('id', id)
+    .maybeSingle();
+  if (current.error) throw databaseError('No fue posible localizar la foto.', current.error);
+  if (!current.data) throw new Error('La foto ya no existe.');
+  const removed = await client.from('gallery_items').delete().eq('id', id);
+  if (removed.error) throw databaseError('No fue posible eliminar la foto.', removed.error);
+  const storage = await client.storage
+    .from(GALLERY_BUCKET)
+    .remove([String(current.data.storage_path)]);
+  if (storage.error) console.error('La foto quedó pendiente de limpieza.', storage.error.message);
 }

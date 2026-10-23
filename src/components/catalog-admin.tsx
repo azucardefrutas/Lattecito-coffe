@@ -6,8 +6,8 @@ import {
   CalendarDays,
   Coffee,
   ImagePlus,
+  Images,
   LayoutDashboard,
-  LockKeyhole,
   Menu,
   PackageOpen,
   Plus,
@@ -36,6 +36,7 @@ import WeeklyCashAdmin from '@/components/weekly-cash-admin';
 import FinanceDashboard from '@/components/finance-dashboard';
 import ShowcaseManager from '@/components/showcase-manager';
 import SystemHealth from '@/components/system-health';
+import GalleryAdmin from '@/components/gallery-admin';
 
 type View =
   | 'summary'
@@ -47,6 +48,7 @@ type View =
   | 'inventory'
   | 'business'
   | 'showcase'
+  | 'gallery'
   | 'permissions';
 const tones: CatalogProduct['tone'][] = ['coffee', 'matcha', 'boba', 'caramel', 'cocoa', 'dark'];
 const isUnitProduct = (kind: CatalogProduct['kind']) => kind === 'snack' || kind === 'merch';
@@ -394,6 +396,15 @@ export default function CatalogAdmin() {
             }}
           />
           <Nav
+            active={view === 'gallery'}
+            icon={<Images />}
+            label="Capturas"
+            onClick={() => {
+              setView('gallery');
+              setMobileMenuOpen(false);
+            }}
+          />
+          <Nav
             active={view === 'permissions'}
             icon={<Users />}
             label="Permisos"
@@ -402,17 +413,6 @@ export default function CatalogAdmin() {
               setMobileMenuOpen(false);
             }}
           />
-          <button
-            aria-disabled="true"
-            className="nav-locked"
-            disabled
-            title="Se habilitará más adelante"
-          >
-            <LockKeyhole />
-            <span>
-              Capturas <small>Privado · próximamente</small>
-            </span>
-          </button>
         </nav>
         <div className="catalog-session">
           <p>
@@ -446,7 +446,9 @@ export default function CatalogAdmin() {
                               ? 'Datos del negocio'
                               : view === 'showcase'
                                 ? 'Modo lectura'
-                                : 'Permisos'}
+                                : view === 'gallery'
+                                  ? 'Capturas'
+                                  : 'Permisos'}
             </h1>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
@@ -617,6 +619,8 @@ export default function CatalogAdmin() {
         {view === 'inventory' && <InventoryAdmin catalog={catalog} />}
 
         {view === 'showcase' && <ShowcaseManager />}
+
+        {view === 'gallery' && <GalleryAdmin />}
 
         {view === 'permissions' && <PermissionsPanel />}
       </main>

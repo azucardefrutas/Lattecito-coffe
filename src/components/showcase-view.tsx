@@ -1,4 +1,4 @@
-import { BarChart3, Coffee, PackageCheck, ReceiptText, ShieldCheck } from 'lucide-react';
+import { BarChart3, Coffee, Images, PackageCheck, ReceiptText, ShieldCheck } from 'lucide-react';
 import { money } from '@/lib/model';
 import { percent } from '@/lib/business-analytics';
 import type { ShowcaseDashboard } from '@/lib/showcase';
@@ -308,6 +308,16 @@ export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
             <span>Utilidad neta ÷ inversión total × 100.</span>
           </li>
         </ol>
+      </section>
+
+      <section className="showcase-gallery-callout">
+        <Images size={30} />
+        <div>
+          <span className="eyebrow">EVIDENCIA VISUAL</span>
+          <h2>Conoce el proyecto en imágenes</h2>
+          <p>Recorre el local, los productos y las actividades de Lattecito Coffee.</p>
+        </div>
+        <a href="https://lattecito-coffe.vercel.app/capturas">Abrir galería</a>
       </section>
 
       <footer className="showcase-footer">
