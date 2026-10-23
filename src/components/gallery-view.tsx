@@ -136,11 +136,6 @@ export default function GalleryView({ items }: { items: PublicGalleryItem[] }) {
         </section>
       )}
 
-      <footer className="public-gallery-footer">
-        <span className="showcase-logo">lattecito</span>
-        <p>Tu nueva pausa favorita · Quintana Roo, México</p>
-      </footer>
-
       {selected && (
         <div
           className="gallery-lightbox"
