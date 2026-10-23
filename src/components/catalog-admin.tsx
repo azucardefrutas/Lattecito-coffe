@@ -8,6 +8,7 @@ import {
   ImagePlus,
   LayoutDashboard,
   LockKeyhole,
+  Menu,
   PackageOpen,
   Plus,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   Sparkles,
   Trash2,
   Users,
+  X,
 } from 'lucide-react';
 import { money } from '@/lib/model';
 import {
@@ -83,6 +85,7 @@ export default function CatalogAdmin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [view, setView] = useState<View>('summary');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [product, setProduct] = useState<CatalogProduct | null>(null);
   const [modifier, setModifier] = useState<CatalogModifier | null>(null);
   const [image, setImage] = useState<File | null>(null);
@@ -291,70 +294,113 @@ export default function CatalogAdmin() {
 
   return (
     <div className="catalog-shell">
-      <aside className="catalog-sidebar">
-        <div className="wordmark">
-          lattecito<span>ADMINISTRACIÓN WEB</span>
+      <aside className={`catalog-sidebar ${mobileMenuOpen ? 'menu-open' : ''}`}>
+        <div className="catalog-sidebar-header">
+          <div className="wordmark">
+            lattecito<span>ADMINISTRACIÓN WEB</span>
+          </div>
+          <button
+            className="catalog-menu-toggle"
+            type="button"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="catalog-admin-navigation"
+            aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            onClick={() => setMobileMenuOpen((current) => !current)}
+          >
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            <span>{mobileMenuOpen ? 'Cerrar' : 'Menú'}</span>
+          </button>
         </div>
-        <nav aria-label="Secciones de administración">
+        <nav id="catalog-admin-navigation" aria-label="Secciones de administración">
           <Nav
             active={view === 'summary'}
             icon={<LayoutDashboard />}
             label="Resumen"
-            onClick={() => setView('summary')}
+            onClick={() => {
+              setView('summary');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'sales'}
             icon={<BadgeDollarSign />}
             label="Ventas"
-            onClick={() => setView('sales')}
+            onClick={() => {
+              setView('sales');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'weekly-cash'}
             icon={<CalendarDays />}
             label="Caja total"
-            onClick={() => setView('weekly-cash')}
+            onClick={() => {
+              setView('weekly-cash');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'products'}
             icon={<Coffee />}
             label="Menú"
-            onClick={() => setView('products')}
+            onClick={() => {
+              setView('products');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'sizes'}
             icon={<Ruler />}
             label="Tamaños"
-            onClick={() => setView('sizes')}
+            onClick={() => {
+              setView('sizes');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'extras'}
             icon={<Sparkles />}
             label="Extras"
-            onClick={() => setView('extras')}
+            onClick={() => {
+              setView('extras');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'inventory'}
             icon={<PackageOpen />}
             label="Inventario"
-            onClick={() => setView('inventory')}
+            onClick={() => {
+              setView('inventory');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'business'}
             icon={<Settings2 />}
             label="Negocio"
-            onClick={() => setView('business')}
+            onClick={() => {
+              setView('business');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'showcase'}
             icon={<Share2 />}
             label="Modo lectura"
-            onClick={() => setView('showcase')}
+            onClick={() => {
+              setView('showcase');
+              setMobileMenuOpen(false);
+            }}
           />
           <Nav
             active={view === 'permissions'}
             icon={<Users />}
             label="Permisos"
-            onClick={() => setView('permissions')}
+            onClick={() => {
+              setView('permissions');
+              setMobileMenuOpen(false);
+            }}
           />
           <button
             aria-disabled="true"

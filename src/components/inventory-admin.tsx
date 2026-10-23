@@ -1,7 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, ArrowDownUp, Boxes, Plus, Save, UtensilsCrossed } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowDownUp,
+  Boxes,
+  CircleHelp,
+  Minus,
+  Plus,
+  Save,
+  UtensilsCrossed,
+} from 'lucide-react';
 import type { PublicCatalog } from '@/lib/catalog-schema';
 import type {
   InventoryItem,
@@ -30,11 +39,41 @@ const itemTemplates: Array<{ name: string; unit: InventoryUnit }> = [
   { name: 'Vaso con tapa', unit: 'pieza' },
 ];
 
+type AdjustmentMode = 'entry' | 'exit';
+
+function simpleQuantity(value: number, unit: InventoryUnit) {
+  const exact = value.toLocaleString('es-MX', { maximumFractionDigits: 3 });
+  if (unit === 'ml' && Math.abs(value) >= 1000) {
+    const liters = (value / 1000).toLocaleString('es-MX', { maximumFractionDigits: 3 });
+    return { main: `${liters} L`, detail: `${exact} ml` };
+  }
+  if (unit === 'g' && Math.abs(value) >= 1000) {
+    const kilograms = (value / 1000).toLocaleString('es-MX', { maximumFractionDigits: 3 });
+    return { main: `${kilograms} kg`, detail: `${exact} g` };
+  }
+  return {
+    main: unit === 'pieza' ? `${exact} ${value === 1 ? 'pieza' : 'piezas'}` : `${exact} ${unit}`,
+    detail:
+      unit === 'ml'
+        ? 'Medido en mililitros'
+        : unit === 'g'
+          ? 'Medido en gramos'
+          : 'Conteo por pieza',
+  };
+}
+
+function unitHelp(unit: InventoryUnit) {
+  if (unit === 'ml') return 'Para leche y jarabes. 1 litro = 1,000 ml.';
+  if (unit === 'g') return 'Para café, matcha y polvos. 1 kilo = 1,000 g.';
+  return 'Para vasos, tapas, brownies o artículos que cuentas uno por uno.';
+}
+
 export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) {
   const [data, setData] = useState<InventoryState | null>(null);
   const [itemDraft, setItemDraft] = useState(blankItem());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
+  const [adjustMode, setAdjustMode] = useState<AdjustmentMode>('entry');
   const [adjustQuantity, setAdjustQuantity] = useState('');
   const [adjustReason, setAdjustReason] = useState('Compra a proveedor');
   const [recipeTarget, setRecipeTarget] = useState(
@@ -129,14 +168,26 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
   async function adjustStock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!adjustingId) return;
+    const amount = Math.abs(Number(adjustQuantity));
+    const selectedItem = data?.items.find((item) => item.id === adjustingId);
+    if (!selectedItem || !Number.isFinite(amount) || amount <= 0) {
+      setError('Escribe una cantidad mayor que cero.');
+      return;
+    }
+    if (adjustMode === 'exit' && amount > selectedItem.stock) {
+      setError(
+        `No puedes descontar más de lo disponible: ${simpleQuantity(selectedItem.stock, selectedItem.unit).main}.`,
+      );
+      return;
+    }
     const ok = await command(
       {
         action: 'adjust',
         itemId: adjustingId,
-        quantity: Number(adjustQuantity),
+        quantity: adjustMode === 'entry' ? amount : -amount,
         reason: adjustReason.trim(),
       },
-      'Existencia actualizada y movimiento registrado.',
+      adjustMode === 'entry' ? 'Compra sumada al inventario.' : 'Salida descontada del inventario.',
     );
     if (ok) {
       setAdjustingId(null);
@@ -173,6 +224,13 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
       packageQuantity: '',
       active: item.active,
     });
+  }
+
+  function openAdjustment(itemId: string, mode: AdjustmentMode) {
+    setAdjustingId(itemId);
+    setAdjustMode(mode);
+    setAdjustQuantity('');
+    setAdjustReason(mode === 'entry' ? 'Compra a proveedor' : 'Merma o corrección');
   }
 
   function calculateUnitCost() {
@@ -214,6 +272,17 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
     setError('');
   }
 
+  const selectedAdjustment = data?.items.find((item) => item.id === adjustingId) ?? null;
+  const adjustmentAmount = Math.abs(Number(adjustQuantity));
+  const projectedStock = selectedAdjustment
+    ? selectedAdjustment.stock +
+      (Number.isFinite(adjustmentAmount)
+        ? adjustMode === 'entry'
+          ? adjustmentAmount
+          : -adjustmentAmount
+        : 0)
+    : 0;
+
   if (!data)
     return (
       <section className="panel">
@@ -233,6 +302,40 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
           {notice}
         </p>
       )}
+      <section className="inventory-unit-guide" aria-labelledby="inventory-help-title">
+        <div className="inventory-unit-guide-copy">
+          <CircleHelp size={24} />
+          <div>
+            <span className="eyebrow">GUÍA RÁPIDA</span>
+            <h2 id="inventory-help-title">¿Cómo funciona el inventario?</h2>
+            <p>
+              Tú eliges una cantidad para recibir aviso. Cuando lo disponible llega a esa cantidad o
+              baja de ella, aparecerá <strong>“Necesita compra”</strong>.
+            </p>
+          </div>
+        </div>
+        <div className="inventory-unit-examples">
+          <div>
+            <strong>1 litro</strong>
+            <span>= 1,000 ml</span>
+            <small>Leche y jarabes</small>
+          </div>
+          <div>
+            <strong>1 kilo</strong>
+            <span>= 1,000 g</span>
+            <small>Café, matcha y polvos</small>
+          </div>
+          <div>
+            <strong>1 vaso</strong>
+            <span>= 1 pieza</span>
+            <small>Vasos, tapas y snacks</small>
+          </div>
+        </div>
+        <p className="inventory-critical-example">
+          <AlertTriangle size={17} /> Ejemplo: si eliges “avisarme al llegar a 1 litro”, la alerta
+          aparece cuando queden 1,000 ml o menos.
+        </p>
+      </section>
       <section className="summary-grid inventory-summary">
         <article className="metric-card">
           <span>INSUMOS ACTIVOS</span>
@@ -240,9 +343,9 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
           <small>en el inventario central</small>
         </article>
         <article className="metric-card">
-          <span>STOCK CRÍTICO</span>
+          <span>NECESITAN COMPRA</span>
           <strong>{data.summary.lowStockCount}</strong>
-          <small>en mínimo o por debajo</small>
+          <small>llegaron al nivel de aviso</small>
         </article>
         <article className="metric-card">
           <span>VALOR ESTIMADO</span>
@@ -260,7 +363,7 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
         <div className="section-heading">
           <div>
             <span className="eyebrow">EXISTENCIAS</span>
-            <h2>Insumos y alertas</h2>
+            <h2>Lo que tienes disponible</h2>
           </div>
           <button className="small-button" disabled={busy} onClick={() => void load()}>
             Actualizar
@@ -268,38 +371,46 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
         </div>
         {data.summary.lowStockCount > 0 && (
           <p className="inventory-alert">
-            <AlertTriangle size={18} /> Hay {data.summary.lowStockCount} insumo(s) en nivel crítico.
+            <AlertTriangle size={18} />{' '}
+            {data.summary.lowStockCount === 1
+              ? 'Hay 1 ingrediente que necesita compra.'
+              : `Hay ${data.summary.lowStockCount} ingredientes que necesitan compra.`}
           </p>
         )}
         <div className="inventory-grid">
           {data.items.map((item) => {
             const low = item.active && item.stock <= item.minimum;
+            const stock = simpleQuantity(item.stock, item.unit);
+            const minimum = simpleQuantity(item.minimum, item.unit);
             return (
               <article className={`inventory-card ${low ? 'low' : ''}`} key={item.id}>
                 <div className="inventory-card-head">
                   <Boxes size={20} />
-                  <span>{low ? 'Stock crítico' : item.active ? 'Disponible' : 'Inactivo'}</span>
+                  <span>
+                    {low ? 'Necesita compra' : item.active ? 'Cantidad suficiente' : 'Inactivo'}
+                  </span>
                 </div>
                 <h3>{item.name}</h3>
-                <strong>
-                  {item.stock.toLocaleString('es-MX')} {item.unit}
-                </strong>
+                <span className="inventory-card-label">Te quedan</span>
+                <strong>{stock.main}</strong>
+                <small className="inventory-card-conversion">{stock.detail}</small>
                 <p>
-                  Mínimo: {item.minimum} {item.unit} · Costo: {money(item.costPerUnit)} /{' '}
-                  {item.unit}
+                  <strong>{low ? '¿Por qué aparece el aviso?' : 'Próximo aviso:'}</strong>{' '}
+                  {low
+                    ? `Quedan ${stock.main} y pediste recibir aviso al llegar a ${minimum.main}.`
+                    : `Te avisaremos cuando queden ${minimum.main}.`}
+                  <br />
+                  Costo: {money(item.costPerUnit)} por {item.unit}.
                 </p>
                 <div className="inventory-actions">
                   <button className="small-button" onClick={() => editItem(item)}>
                     Editar
                   </button>
-                  <button
-                    className="small-button"
-                    onClick={() => {
-                      setAdjustingId(item.id);
-                      setAdjustQuantity('');
-                    }}
-                  >
-                    Entrada / salida
+                  <button className="small-button" onClick={() => openAdjustment(item.id, 'entry')}>
+                    <Plus size={15} /> Registrar compra
+                  </button>
+                  <button className="small-button" onClick={() => openAdjustment(item.id, 'exit')}>
+                    <Minus size={15} /> Merma o corrección
                   </button>
                 </div>
               </article>
@@ -347,20 +458,21 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
               />
             </label>
             <label>
-              Unidad
+              ¿Cómo lo vas a medir?
               <select
                 value={itemDraft.unit}
                 onChange={(event) =>
                   setItemDraft({ ...itemDraft, unit: event.target.value as InventoryUnit })
                 }
               >
-                <option value="g">Gramos (g)</option>
-                <option value="ml">Mililitros (ml)</option>
-                <option value="pieza">Piezas</option>
+                <option value="ml">Líquido: mililitros (ml)</option>
+                <option value="g">Peso: gramos (g)</option>
+                <option value="pieza">Conteo: piezas</option>
               </select>
+              <small>{unitHelp(itemDraft.unit)}</small>
             </label>
             <label>
-              Stock mínimo
+              Avisarme cuando queden
               <input
                 required
                 min="0"
@@ -369,6 +481,9 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
                 value={itemDraft.minimum}
                 onChange={(event) => setItemDraft({ ...itemDraft, minimum: event.target.value })}
               />
+              <small>
+                Es el punto para volver a comprar. Ejemplo: 1 litro se escribe como 1000 ml.
+              </small>
             </label>
             <label>
               Costo por {itemDraft.unit} (MXN)
@@ -380,14 +495,15 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
                 value={itemDraft.cost}
                 onChange={(event) => setItemDraft({ ...itemDraft, cost: event.target.value })}
               />
+              <small>Si no lo conoces, usa la calculadora de abajo.</small>
             </label>
           </div>
           <div className="unit-cost-calculator">
             <div>
               <span className="eyebrow">CALCULADORA DE COSTO</span>
               <p>
-                Ejemplo: precio total de una bolsa ÷ gramos que contiene = costo por gramo. Usa tus
-                importes reales.
+                Escribe cuánto pagaste por el paquete y cuánto contiene. Calcularemos el costo de
+                cada ml, gramo o pieza automáticamente.
               </p>
             </div>
             <label>
@@ -403,7 +519,7 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
               />
             </label>
             <label>
-              Contenido total ({itemDraft.unit})
+              ¿Cuánto trae el paquete? ({itemDraft.unit})
               <input
                 min="0.001"
                 step="0.001"
@@ -445,26 +561,59 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
           </div>
         </form>
 
-        {adjustingId && (
-          <form className="inventory-form accent" onSubmit={adjustStock}>
-            <span className="eyebrow">MOVIMIENTO DE STOCK</span>
-            <h3>{data.items.find((item) => item.id === adjustingId)?.name}</h3>
+        {selectedAdjustment && (
+          <form
+            className={`inventory-form accent stock-movement-form ${adjustMode}`}
+            onSubmit={adjustStock}
+          >
+            <span className="eyebrow">
+              {adjustMode === 'entry' ? 'REGISTRAR COMPRA' : 'REGISTRAR MERMA O CORRECCIÓN'}
+            </span>
+            <h3>{selectedAdjustment.name}</h3>
             <p>
-              Usa una cantidad positiva para una compra o entrada. Usa una cantidad negativa para
-              merma, corrección o salida manual.
+              Ahora tienes{' '}
+              <strong>
+                {simpleQuantity(selectedAdjustment.stock, selectedAdjustment.unit).main}
+              </strong>
+              . Elige qué ocurrió y escribe una cantidad normal, sin signos negativos.
             </p>
-            <div className="field-grid">
+            <div className="movement-type-picker" aria-label="Tipo de movimiento">
+              <button
+                className={adjustMode === 'entry' ? 'active' : ''}
+                type="button"
+                onClick={() => {
+                  setAdjustMode('entry');
+                  setAdjustReason('Compra a proveedor');
+                }}
+              >
+                <Plus size={17} /> Sumé una compra
+              </button>
+              <button
+                className={adjustMode === 'exit' ? 'active' : ''}
+                type="button"
+                onClick={() => {
+                  setAdjustMode('exit');
+                  setAdjustReason('Merma o corrección');
+                }}
+              >
+                <Minus size={17} /> Desconté una cantidad
+              </button>
+            </div>
+            <div className="stock-movement-grid">
               <label>
-                Cantidad
+                {adjustMode === 'entry' ? 'Cantidad que compraste' : 'Cantidad que vas a descontar'}{' '}
+                ({selectedAdjustment.unit})
                 <input
                   autoFocus
                   required
-                  step="0.001"
+                  min={selectedAdjustment.unit === 'pieza' ? '1' : '0.001'}
+                  step={selectedAdjustment.unit === 'pieza' ? '1' : '0.001'}
                   type="number"
                   value={adjustQuantity}
                   onChange={(event) => setAdjustQuantity(event.target.value)}
-                  placeholder="Ej. 1000 o -50"
+                  placeholder={selectedAdjustment.unit === 'pieza' ? 'Ej. 20' : 'Ej. 1000'}
                 />
+                <small>{unitHelp(selectedAdjustment.unit)}</small>
               </label>
               <label>
                 Motivo
@@ -476,10 +625,21 @@ export default function InventoryAdmin({ catalog }: { catalog: PublicCatalog }) 
                   onChange={(event) => setAdjustReason(event.target.value)}
                 />
               </label>
+              <div className={`stock-result-preview ${projectedStock < 0 ? 'invalid' : ''}`}>
+                <span>Después quedarán</span>
+                <strong>
+                  {simpleQuantity(Math.max(projectedStock, 0), selectedAdjustment.unit).main}
+                </strong>
+                <small>
+                  {projectedStock < 0
+                    ? 'No puedes descontar más de lo disponible.'
+                    : simpleQuantity(Math.max(projectedStock, 0), selectedAdjustment.unit).detail}
+                </small>
+              </div>
             </div>
             <div className="inventory-actions">
-              <button className="button" disabled={busy} type="submit">
-                <ArrowDownUp size={17} /> Registrar movimiento
+              <button className="button" disabled={busy || projectedStock < 0} type="submit">
+                <ArrowDownUp size={17} /> Confirmar movimiento
               </button>
               <button className="small-button" type="button" onClick={() => setAdjustingId(null)}>
                 Cancelar
