@@ -5,6 +5,8 @@ import { Copy, Download, ExternalLink, QrCode, ShieldOff } from 'lucide-react';
 import type { ShowcaseLinkStatus } from '@/lib/showcase';
 
 type Created = { link: ShowcaseLinkStatus; url: string; qrDataUrl: string };
+const dateTime = (value: string) =>
+  new Date(value).toLocaleString('es-MX', { timeZone: 'America/Cancun' });
 
 export default function ShowcaseManager() {
   const [links, setLinks] = useState<ShowcaseLinkStatus[]>([]);
@@ -123,7 +125,7 @@ export default function ShowcaseManager() {
             <img alt="Código QR para el modo de lectura" src={created.qrDataUrl} />
             <div>
               <strong>QR listo para compartir</strong>
-              <p>Vence {new Date(created.link.expiresAt).toLocaleString('es-MX')}</p>
+              <p>Vence {dateTime(created.link.expiresAt)}</p>
               <code>{created.url}</code>
               <div className="inline-fields">
                 <button className="small-button" onClick={() => void copy()}>
@@ -152,11 +154,11 @@ export default function ShowcaseManager() {
           <div className="showcase-active-link">
             <div>
               <strong>Creado por {active.createdBy}</strong>
-              <span>Vence {new Date(active.expiresAt).toLocaleString('es-MX')}</span>
+              <span>Vence {dateTime(active.expiresAt)}</span>
               <small>
                 {active.viewCount} visitas ·{' '}
                 {active.lastViewedAt
-                  ? `Última ${new Date(active.lastViewedAt).toLocaleString('es-MX')}`
+                  ? `Última ${dateTime(active.lastViewedAt)}`
                   : 'Aún no se ha abierto'}
               </small>
             </div>

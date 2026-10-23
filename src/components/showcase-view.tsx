@@ -5,6 +5,8 @@ import type { ShowcaseDashboard } from '@/lib/showcase';
 
 const date = (value: string) =>
   new Date(`${value}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+const dateTime = (value: string) =>
+  new Date(value).toLocaleString('es-MX', { timeZone: 'America/Cancun' });
 
 export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
   const { metrics } = data;
@@ -25,7 +27,7 @@ export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
         <div className="showcase-trust">
           <ShieldCheck size={22} />
           <strong>Acceso temporal protegido</strong>
-          <span>Vence {new Date(data.expiresAt).toLocaleString('es-MX')}</span>
+          <span>Vence {dateTime(data.expiresAt)}</span>
           <small>{data.views} visitas registradas</small>
         </div>
       </header>
@@ -310,7 +312,7 @@ export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
 
       <footer className="showcase-footer">
         <span>Lattecito Coffee · Información agregada, sin datos de clientes</span>
-        <span>Actualizado {new Date(data.generatedAt).toLocaleString('es-MX')}</span>
+        <span>Actualizado {dateTime(data.generatedAt)}</span>
       </footer>
     </main>
   );
