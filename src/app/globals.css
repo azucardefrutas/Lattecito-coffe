@@ -2811,8 +2811,13 @@ tr:hover td {
 }
 
 .inventory-stack {
+  min-width: 0;
   display: grid;
   gap: 24px;
+}
+.inventory-stack > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .inventory-unit-guide {
   padding: 24px;

@@ -33,7 +33,7 @@ export type ShowcaseInventoryItem = {
   minimum: number;
   costPerUnit: number;
   value: number;
-  status: 'Disponible' | 'Stock crítico';
+  status: 'Disponible' | 'Necesita compra';
 };
 
 export type ShowcaseDashboard = {

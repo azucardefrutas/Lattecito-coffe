@@ -182,7 +182,7 @@ export default function FinanceDashboard({
               <dd>{data.inventory.summary.configuredRecipes}</dd>
             </div>
             <div>
-              <dt>Stock crítico</dt>
+              <dt>Necesitan compra</dt>
               <dd>{data.inventory.summary.lowStockCount}</dd>
             </div>
             <div>

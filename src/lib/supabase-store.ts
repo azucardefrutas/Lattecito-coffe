@@ -1138,7 +1138,8 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
           minimum: item.minimum,
           costPerUnit: item.costPerUnit,
           value: Math.round(item.stock * item.costPerUnit),
-          status: item.stock <= item.minimum ? ('Stock crítico' as const) : ('Disponible' as const),
+          status:
+            item.stock <= item.minimum ? ('Necesita compra' as const) : ('Disponible' as const),
         })),
       value: inventory.summary.inventoryValue,
       lowStockCount: inventory.summary.lowStockCount,
