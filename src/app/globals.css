@@ -2486,6 +2486,25 @@ tr:hover td {
 .showcase-secret-note {
   color: var(--muted);
 }
+.showcase-fixed-card {
+  display: grid;
+  gap: 22px;
+}
+.showcase-access-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.showcase-access-heading h2,
+.showcase-builder-form h2 {
+  margin: 3px 0 6px;
+}
+.showcase-access-heading p,
+.showcase-builder-form p {
+  margin: 0;
+  color: var(--muted);
+}
 .showcase-qr-result {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
@@ -2498,6 +2517,15 @@ tr:hover td {
   border: 8px solid #fffaf4;
   border-radius: 15px;
   box-shadow: var(--glass-shadow);
+}
+.showcase-qr-result.is-disabled img {
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+.showcase-qr-result small {
+  display: block;
+  margin-top: -6px;
+  color: var(--muted);
 }
 .showcase-qr-result code {
   display: block;
@@ -4819,7 +4847,8 @@ tr:hover td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .finance-actions,
-  .showcase-active-link {
+  .showcase-active-link,
+  .showcase-access-heading {
     align-items: stretch;
     flex-direction: column;
   }
@@ -4900,6 +4929,8 @@ tr:hover td {
     grid-column: 1;
   }
   .showcase-builder .button,
+  .showcase-fixed-card > .button,
+  .showcase-fixed-card > .danger-button,
   .showcase-active-link .danger-button {
     width: 100%;
   }

@@ -1,6 +1,8 @@
 import type { ProfitMetrics } from './business-analytics';
 import type { InventoryUnit } from './inventory-schema';
 
+export const SHOWCASE_STATIC_SLUG = 'lattecito';
+
 export type ShowcaseDay = {
   date: string;
   tickets: number;
@@ -52,6 +54,7 @@ export type ShowcaseArchive = {
 export type ShowcaseDashboard = {
   generatedAt: string;
   expiresAt: string;
+  accessMode: 'fixed' | 'temporary';
   business: {
     name: string;
     hours: string;
@@ -91,4 +94,12 @@ export type ShowcaseLinkStatus = {
   viewCount: number;
   lastViewedAt: string;
   active: boolean;
+};
+
+export type ShowcaseStaticAccessStatus = {
+  enabled: boolean;
+  updatedAt: string;
+  updatedBy: string;
+  viewCount: number;
+  lastViewedAt: string;
 };

@@ -32,7 +32,9 @@ import type {
   ShowcaseExtra,
   ShowcaseLinkStatus,
   ShowcaseProduct,
+  ShowcaseStaticAccessStatus,
 } from './showcase';
+import { SHOWCASE_STATIC_SLUG } from './showcase';
 import type { GalleryCategory, GalleryItem } from './gallery-schema';
 
 type UserRole = 'admin' | 'developer';
@@ -906,6 +908,38 @@ function showcaseLinkFromRow(row: Record<string, unknown>): ShowcaseLinkStatus {
   };
 }
 
+function showcaseStaticAccessFromRow(row: Record<string, unknown>): ShowcaseStaticAccessStatus {
+  return {
+    enabled: Boolean(row.enabled),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+    updatedBy: String(row.updated_by),
+    viewCount: Number(row.view_count),
+    lastViewedAt: row.last_viewed_at ? new Date(String(row.last_viewed_at)).toISOString() : '',
+  };
+}
+
+export async function readShowcaseStaticAccess() {
+  await ensureSupabase();
+  const { data, error } = await serverClient()
+    .from('showcase_static_access')
+    .select('*')
+    .eq('id', 1)
+    .single();
+  if (error || !data) throw databaseError('No fue posible leer el acceso fijo.', error);
+  return showcaseStaticAccessFromRow(data);
+}
+
+export async function setShowcaseStaticAccess(enabled: boolean, user: MobileUser) {
+  await ensureSupabase();
+  const { data, error } = await serverClient().rpc('set_showcase_static_access', {
+    p_enabled: enabled,
+    p_updated_by: user.username,
+  });
+  if (error || !data) throw databaseError('No fue posible actualizar el acceso fijo.', error);
+  const row = Array.isArray(data) ? data[0] : data;
+  return showcaseStaticAccessFromRow(row as Record<string, unknown>);
+}
+
 export async function listShowcaseLinks() {
   await ensureSupabase();
   const { data, error } = await serverClient()
@@ -1007,13 +1041,21 @@ function aggregateShowcaseExtras(rows: Record<string, unknown>[]) {
 
 export async function readShowcaseDashboard(token: string): Promise<ShowcaseDashboard> {
   await ensureSupabase();
-  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ShowcaseLinkError('Enlace no válido.');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
   const client = serverClient();
-  const viewResult = await client.rpc('record_showcase_view', { p_token_hash: tokenHash });
+  const fixedAccess = token === SHOWCASE_STATIC_SLUG;
+  if (!fixedAccess && !/^[A-Za-z0-9_-]{43}$/.test(token))
+    throw new ShowcaseLinkError('Enlace no válido.');
+  const viewResult = fixedAccess
+    ? await client.rpc('record_static_showcase_view')
+    : await client.rpc('record_showcase_view', {
+        p_token_hash: createHash('sha256').update(token).digest('hex'),
+      });
   if (viewResult.error) throw databaseError('No fue posible validar el enlace.', viewResult.error);
   const viewRow = Array.isArray(viewResult.data) ? viewResult.data[0] : viewResult.data;
-  if (!viewRow) throw new ShowcaseLinkError('Este enlace venció o fue revocado.');
+  if (!viewRow)
+    throw new ShowcaseLinkError(
+      fixedAccess ? 'El acceso fijo está desactivado.' : 'Este enlace venció o fue revocado.',
+    );
 
   const today = cancunBusinessDate();
   const rollingStart = dateDaysAgo(today, 29);
@@ -1145,7 +1187,8 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
 
   return {
     generatedAt: new Date().toISOString(),
-    expiresAt: new Date(String(viewRow.expires_at)).toISOString(),
+    expiresAt: fixedAccess ? '' : new Date(String(viewRow.expires_at)).toISOString(),
+    accessMode: fixedAccess ? 'fixed' : 'temporary',
     business: {
       name: 'Lattecito Coffee',
       hours: catalog.settings.hours,
@@ -1198,22 +1241,30 @@ export async function readSystemHealth() {
   const startedAt = performance.now();
   const client = serverClient();
   const today = cancunBusinessDate();
-  const [catalogResult, salesResult, inventoryResult, recipeResult, costResult, shareResult] =
-    await Promise.all([
-      client.from('catalog_state').select('version, updated_at').eq('id', 1).single(),
-      client
-        .from('admin_sales')
-        .select('id', { count: 'exact', head: true })
-        .eq('business_date', today),
-      client.from('inventory_items').select('id', { count: 'exact', head: true }),
-      client.from('inventory_recipes').select('target_id', { count: 'exact', head: true }),
-      client.from('product_costs').select('product_id', { count: 'exact', head: true }),
-      client
-        .from('showcase_links')
-        .select('id', { count: 'exact', head: true })
-        .is('revoked_at', null)
-        .gt('expires_at', new Date().toISOString()),
-    ]);
+  const [
+    catalogResult,
+    salesResult,
+    inventoryResult,
+    recipeResult,
+    costResult,
+    shareResult,
+    staticShareResult,
+  ] = await Promise.all([
+    client.from('catalog_state').select('version, updated_at').eq('id', 1).single(),
+    client
+      .from('admin_sales')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_date', today),
+    client.from('inventory_items').select('id', { count: 'exact', head: true }),
+    client.from('inventory_recipes').select('target_id', { count: 'exact', head: true }),
+    client.from('product_costs').select('product_id', { count: 'exact', head: true }),
+    client
+      .from('showcase_links')
+      .select('id', { count: 'exact', head: true })
+      .is('revoked_at', null)
+      .gt('expires_at', new Date().toISOString()),
+    client.from('showcase_static_access').select('enabled').eq('id', 1).single(),
+  ]);
   const results = [
     catalogResult,
     salesResult,
@@ -1221,6 +1272,7 @@ export async function readSystemHealth() {
     recipeResult,
     costResult,
     shareResult,
+    staticShareResult,
   ];
   if (results.some((result) => result.error))
     throw databaseError(
@@ -1240,7 +1292,7 @@ export async function readSystemHealth() {
     inventoryItems: inventoryResult.count ?? 0,
     recipes: recipeResult.count ?? 0,
     productCosts: costResult.count ?? 0,
-    activeShowcaseLinks: shareResult.count ?? 0,
+    activeShowcaseLinks: (shareResult.count ?? 0) + (staticShareResult.data?.enabled ? 1 : 0),
   };
 }
 

@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, Download, ExternalLink, QrCode, ShieldOff } from 'lucide-react';
-import type { ShowcaseLinkStatus } from '@/lib/showcase';
+import { Clock3, Copy, Download, ExternalLink, Link2, QrCode, ShieldOff } from 'lucide-react';
+import type { ShowcaseLinkStatus, ShowcaseStaticAccessStatus } from '@/lib/showcase';
 
 type Created = { link: ShowcaseLinkStatus; url: string; qrDataUrl: string };
+type Fixed = { access: ShowcaseStaticAccessStatus; url: string; qrDataUrl: string };
 const dateTime = (value: string) =>
   new Date(value).toLocaleString('es-MX', { timeZone: 'America/Cancun' });
 
@@ -12,6 +13,7 @@ export default function ShowcaseManager() {
   const [links, setLinks] = useState<ShowcaseLinkStatus[]>([]);
   const [durationDays, setDurationDays] = useState(90);
   const [created, setCreated] = useState<Created | null>(null);
+  const [fixed, setFixed] = useState<Fixed | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -21,6 +23,7 @@ export default function ShowcaseManager() {
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? 'No fue posible cargar los enlaces.');
     setLinks(body.links);
+    setFixed(body.fixed);
   }, []);
   useEffect(() => {
     void load().catch((cause) =>
@@ -41,10 +44,36 @@ export default function ShowcaseManager() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? 'No fue posible crear el acceso.');
       setCreated(body);
-      setNotice('QR creado. El enlace anterior quedó cerrado automáticamente.');
+      setNotice('QR temporal creado. El enlace temporal anterior quedó cerrado automáticamente.');
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No fue posible crear el acceso.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleFixed() {
+    if (!fixed) return;
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await fetch('/api/catalog-admin/showcase', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !fixed.access.enabled }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'No fue posible actualizar el QR fijo.');
+      setFixed(body.fixed);
+      setNotice(
+        body.fixed.access.enabled
+          ? 'QR fijo habilitado. La dirección seguirá siendo la misma.'
+          : 'QR fijo deshabilitado. La dirección se conserva para volver a habilitarla después.',
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible actualizar el QR fijo.');
     } finally {
       setBusy(false);
     }
@@ -71,16 +100,14 @@ export default function ShowcaseManager() {
     }
   }
 
-  async function copy() {
-    if (!created) return;
-    await navigator.clipboard.writeText(created.url);
+  async function copy(url: string) {
+    await navigator.clipboard.writeText(url);
     setNotice('Enlace copiado.');
   }
-  function download() {
-    if (!created) return;
+  function download(qrDataUrl: string, filename: string) {
     const link = document.createElement('a');
-    link.href = created.qrDataUrl;
-    link.download = 'lattecito-modo-lectura-qr.png';
+    link.href = qrDataUrl;
+    link.download = filename;
     link.click();
   }
   const active = links.find((link) => link.active);
@@ -100,8 +127,69 @@ export default function ShowcaseManager() {
         </div>
         <QrCode size={62} />
       </section>
+
+      {fixed && (
+        <section className="panel showcase-fixed-card">
+          <div className="showcase-access-heading">
+            <div>
+              <span className="eyebrow">QR FIJO · DIRECCIÓN PERMANENTE</span>
+              <h2>Imprímelo una vez y úsalo siempre</h2>
+              <p>
+                Al habilitarlo conserva exactamente el mismo enlace. Puedes apagar el acceso y
+                volverlo a encender después sin cambiar el QR.
+              </p>
+            </div>
+            <span className={fixed.access.enabled ? 'status-good' : 'status-warn'}>
+              {fixed.access.enabled ? 'Habilitado' : 'Deshabilitado'}
+            </span>
+          </div>
+          <div className={`showcase-qr-result${fixed.access.enabled ? '' : ' is-disabled'}`}>
+            <img alt="Código QR fijo para el modo de lectura" src={fixed.qrDataUrl} />
+            <div>
+              <strong>Enlace fijo de Lattecito</strong>
+              <p>
+                {fixed.access.enabled
+                  ? 'Disponible para escanear ahora.'
+                  : 'El QR conserva su dirección, pero no abre el informe mientras esté apagado.'}
+              </p>
+              <code>{fixed.url}</code>
+              <small>
+                {fixed.access.viewCount} visitas · Actualizado por {fixed.access.updatedBy} el{' '}
+                {dateTime(fixed.access.updatedAt)}
+              </small>
+              <div className="inline-fields">
+                <button className="small-button" onClick={() => void copy(fixed.url)}>
+                  <Copy size={15} /> Copiar
+                </button>
+                <button
+                  className="small-button"
+                  onClick={() => download(fixed.qrDataUrl, 'lattecito-modo-lectura-qr-fijo.png')}
+                >
+                  <Download size={15} /> Descargar QR
+                </button>
+                {fixed.access.enabled && (
+                  <a className="small-button" href={fixed.url} rel="noreferrer" target="_blank">
+                    <ExternalLink size={15} /> Abrir
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            className={fixed.access.enabled ? 'danger-button' : 'button'}
+            disabled={busy}
+            onClick={() => void toggleFixed()}
+          >
+            {fixed.access.enabled ? <ShieldOff size={16} /> : <Link2 size={16} />}
+            {fixed.access.enabled ? 'Deshabilitar QR fijo' : 'Habilitar QR fijo'}
+          </button>
+        </section>
+      )}
+
       <section className="panel showcase-builder">
         <div className="showcase-builder-form">
+          <span className="eyebrow">QR TEMPORAL · DIRECCIÓN ALEATORIA</span>
+          <h2>Comparte un acceso con vencimiento</h2>
           <label>
             Vigencia del acceso
             <select
@@ -116,9 +204,12 @@ export default function ShowcaseManager() {
             </select>
           </label>
           <button className="button" disabled={busy} onClick={() => void create()}>
-            <QrCode size={17} /> {busy ? 'Preparando…' : 'Generar nuevo QR'}
+            <Clock3 size={17} /> {busy ? 'Preparando…' : 'Generar QR temporal'}
           </button>
-          <small>Solo puede existir un acceso activo. Crear uno nuevo cierra el anterior.</small>
+          <small>
+            Cada QR temporal usa una dirección aleatoria. Crear otro cierra únicamente el temporal
+            anterior; el QR fijo no cambia.
+          </small>
         </div>
         {created ? (
           <div className="showcase-qr-result">
@@ -128,10 +219,15 @@ export default function ShowcaseManager() {
               <p>Vence {dateTime(created.link.expiresAt)}</p>
               <code>{created.url}</code>
               <div className="inline-fields">
-                <button className="small-button" onClick={() => void copy()}>
+                <button className="small-button" onClick={() => void copy(created.url)}>
                   <Copy size={15} /> Copiar
                 </button>
-                <button className="small-button" onClick={download}>
+                <button
+                  className="small-button"
+                  onClick={() =>
+                    download(created.qrDataUrl, 'lattecito-modo-lectura-qr-temporal.png')
+                  }
+                >
                   <Download size={15} /> Descargar
                 </button>
                 <a className="small-button" href={created.url} rel="noreferrer" target="_blank">
@@ -142,14 +238,14 @@ export default function ShowcaseManager() {
           </div>
         ) : (
           <p className="showcase-secret-note">
-            Por seguridad, el enlace completo solo se muestra al generarlo. Si cerraste esta
-            pantalla, crea uno nuevo.
+            El enlace temporal completo solo se muestra al generarlo. Si necesitas una dirección que
+            puedas volver a descargar, utiliza el QR fijo de arriba.
           </p>
         )}
       </section>
       <section className="panel">
-        <span className="eyebrow">ESTADO DEL ACCESO</span>
-        <h2>{active ? 'Hay un QR activo' : 'No hay accesos activos'}</h2>
+        <span className="eyebrow">ESTADO DEL QR TEMPORAL</span>
+        <h2>{active ? 'Hay un QR temporal activo' : 'No hay QR temporales activos'}</h2>
         {active && (
           <div className="showcase-active-link">
             <div>

@@ -86,8 +86,8 @@ export default function SystemHealth() {
               icon={<ShieldCheck />}
               label="Accesos públicos"
               value={String(health.activeShowcaseLinks)}
-              detail="enlaces temporales activos"
-              good={health.activeShowcaseLinks <= 1}
+              detail="fijos y temporales activos"
+              good={health.activeShowcaseLinks <= 2}
             />
           </div>
           <div className="health-facts">

@@ -5,7 +5,7 @@ import { readShowcaseDashboard, ShowcaseLinkError } from '@/lib/supabase-store';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Lattecito Coffee · Informe de negocio',
-  description: 'Vista temporal de solo lectura del desempeño de Lattecito Coffee.',
+  description: 'Vista de solo lectura del desempeño de Lattecito Coffee.',
   robots: { index: false, follow: false, noarchive: true },
 };
 

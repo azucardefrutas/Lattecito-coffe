@@ -34,8 +34,14 @@ export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
         </div>
         <div className="showcase-trust">
           <ShieldCheck size={22} />
-          <strong>Acceso temporal protegido</strong>
-          <span>Vence {dateTime(data.expiresAt)}</span>
+          <strong>
+            {data.accessMode === 'fixed' ? 'Acceso fijo habilitado' : 'Acceso temporal protegido'}
+          </strong>
+          <span>
+            {data.accessMode === 'fixed'
+              ? 'La dirección permanece igual hasta desactivarla.'
+              : `Vence ${dateTime(data.expiresAt)}`}
+          </span>
           <small>{data.views} visitas registradas</small>
         </div>
       </header>
