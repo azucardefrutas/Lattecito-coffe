@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Coffee, Expand, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Coffee, X } from 'lucide-react';
 import {
   galleryCategories,
   galleryCategoryLabels,
@@ -80,24 +80,18 @@ export default function GalleryView({ items }: { items: PublicGalleryItem[] }) {
               onClick={() => setSelectedId(item.id)}
               aria-label={`Abrir foto: ${item.title}`}
             >
-              <span
-                className="public-gallery-image"
-                style={{ aspectRatio: `${item.width} / ${item.height}` }}
-              >
+              <span className="public-gallery-image">
                 <img
                   src={item.imageUrl}
                   alt={item.altText}
-                  loading={index < 4 ? 'eager' : 'lazy'}
+                  loading={index < 10 ? 'eager' : 'lazy'}
                   decoding="async"
                 />
-                <span className="public-gallery-expand">
-                  <Expand size={18} /> Ver
+                <span className="public-gallery-caption">
+                  <small>{galleryCategoryLabels[item.category]}</small>
+                  <strong>{item.title}</strong>
+                  {item.description && <span>{item.description}</span>}
                 </span>
-              </span>
-              <span className="public-gallery-caption">
-                <small>{galleryCategoryLabels[item.category]}</small>
-                <strong>{item.title}</strong>
-                {item.description && <span>{item.description}</span>}
               </span>
             </button>
           ))}
