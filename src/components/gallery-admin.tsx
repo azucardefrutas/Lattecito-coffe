@@ -360,7 +360,7 @@ export default function GalleryAdmin() {
                 </div>
                 <div className="gallery-admin-fields">
                   <label>
-                    Título
+                    Título público
                     <input
                       value={item.title}
                       maxLength={120}

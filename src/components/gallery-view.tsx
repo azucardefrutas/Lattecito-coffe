@@ -143,10 +143,6 @@ export default function GalleryView({ items }: { items: PublicGalleryItem[] }) {
           <figure onClick={(event) => event.stopPropagation()}>
             <img src={selected.imageUrl} alt={selected.altText} />
             <figcaption>
-              <small>
-                {galleryCategoryLabels[selected.category]} · {selectedIndex + 1} de{' '}
-                {filtered.length}
-              </small>
               <strong>{selected.title}</strong>
               {selected.description && <span>{selected.description}</span>}
             </figcaption>
