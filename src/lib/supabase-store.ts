@@ -26,6 +26,7 @@ import {
 } from './expenses';
 import { buildWeeklyCashSummary, businessWeekStart, type WeeklyCashExpense } from './weekly-cash';
 import { buildProfitMetrics } from './business-analytics';
+import { businessPeriodDays, showcaseArchiveFromRow } from './business-periods';
 import type {
   ShowcaseDashboard,
   ShowcaseExtra,
@@ -763,6 +764,8 @@ export async function readMobileDashboard() {
     month: '2-digit',
     day: '2-digit',
   }).format(weekStart);
+  const activePeriodStart = await readBusinessPeriodStartedOn(client, weekStartDate);
+  const reportingStart = activePeriodStart > weekStartDate ? activePeriodStart : weekStartDate;
   const [
     result,
     historyResult,
@@ -782,12 +785,12 @@ export async function readMobileDashboard() {
       .select(
         'business_date, ticket_count, paid_total, cash_total, transfer_total, pending_total, cost_total',
       )
-      .gte('business_date', weekStartDate)
+      .gte('business_date', reportingStart)
       .order('business_date', { ascending: false }),
     client
       .from('supply_expenses')
       .select('*')
-      .gte('business_date', weekStartDate)
+      .gte('business_date', reportingStart)
       .order('created_at', { ascending: false }),
     client
       .from('weekly_cash_expenses')
@@ -797,11 +800,11 @@ export async function readMobileDashboard() {
     client
       .from('daily_product_totals')
       .select('business_date, product_name, size, quantity, amount')
-      .gte('business_date', weekStartDate),
+      .gte('business_date', reportingStart),
     client
       .from('daily_extra_totals')
       .select('business_date, extra_name, quantity, amount')
-      .gte('business_date', weekStartDate),
+      .gte('business_date', reportingStart),
   ]);
   if (result.error) throw databaseError('No fue posible leer las ventas del día.', result.error);
   if (historyResult.error)
@@ -865,6 +868,7 @@ export async function readMobileDashboard() {
   });
   const expensesTotal = expenseTotal(expenses);
   return {
+    period: { start: activePeriodStart },
     catalog,
     inventory,
     daily,
@@ -952,6 +956,19 @@ function dateDaysAgo(today: string, amount: number) {
   return value.toISOString().slice(0, 10);
 }
 
+async function readBusinessPeriodStartedOn(
+  client: ReturnType<typeof serverClient>,
+  fallback: string,
+) {
+  const { data, error } = await client
+    .from('business_period_state')
+    .select('started_on')
+    .eq('id', 1)
+    .maybeSingle();
+  if (error) throw databaseError('No fue posible leer el periodo activo.', error);
+  return data ? String(data.started_on) : fallback;
+}
+
 function aggregateShowcaseProducts(rows: Record<string, unknown>[]) {
   const products = new Map<string, ShowcaseProduct>();
   for (const row of rows) {
@@ -999,7 +1016,18 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
   if (!viewRow) throw new ShowcaseLinkError('Este enlace venció o fue revocado.');
 
   const today = cancunBusinessDate();
-  const periodStart = dateDaysAgo(today, 29);
+  const rollingStart = dateDaysAgo(today, 29);
+  const [activePeriodStart, archiveResult] = await Promise.all([
+    readBusinessPeriodStartedOn(client, rollingStart),
+    client
+      .from('business_period_archives')
+      .select('id, period_start, period_end, snapshot, created_by, created_at')
+      .order('period_end', { ascending: false })
+      .limit(6),
+  ]);
+  if (archiveResult.error)
+    throw databaseError('No fue posible leer el historial de periodos.', archiveResult.error);
+  const periodStart = activePeriodStart > rollingStart ? activePeriodStart : rollingStart;
   const [
     { catalog },
     costs,
@@ -1123,7 +1151,7 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
       hours: catalog.settings.hours,
       sample: catalog.settings.sample,
     },
-    period: { start: periodStart, end: today, days: 30 },
+    period: { start: periodStart, end: today, days: businessPeriodDays(periodStart, today) },
     metrics,
     days,
     products: aggregateShowcaseProducts(productResult.data ?? []),
@@ -1158,6 +1186,9 @@ export async function readShowcaseDashboard(token: string): Promise<ShowcaseDash
         missingProducts.length === 0 &&
         (daysWithSales === 0 || daysWithRecordedCost === daysWithSales),
     },
+    archives: (archiveResult.data ?? []).map((row) =>
+      showcaseArchiveFromRow(row as Record<string, unknown>),
+    ),
     views: Number(viewRow.view_count),
   };
 }

@@ -36,6 +36,19 @@ export type ShowcaseInventoryItem = {
   status: 'Disponible' | 'Necesita compra';
 };
 
+export type ShowcaseArchive = {
+  id: string;
+  createdAt: string;
+  createdBy: string;
+  period: { start: string; end: string; days: number };
+  metrics: ProfitMetrics;
+  inventory: {
+    items: ShowcaseInventoryItem[];
+    value: number;
+    lowStockCount: number;
+  };
+};
+
 export type ShowcaseDashboard = {
   generatedAt: string;
   expiresAt: string;
@@ -65,6 +78,7 @@ export type ShowcaseDashboard = {
     daysWithRecordedCost: number;
     reliable: boolean;
   };
+  archives: ShowcaseArchive[];
   views: number;
 };
 

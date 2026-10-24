@@ -1,4 +1,12 @@
-import { BarChart3, Coffee, Images, PackageCheck, ReceiptText, ShieldCheck } from 'lucide-react';
+import {
+  Archive,
+  BarChart3,
+  Coffee,
+  Images,
+  PackageCheck,
+  ReceiptText,
+  ShieldCheck,
+} from 'lucide-react';
 import { money } from '@/lib/model';
 import { percent } from '@/lib/business-analytics';
 import type { ShowcaseDashboard } from '@/lib/showcase';
@@ -20,8 +28,8 @@ export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
           <span className="eyebrow">INFORME DE NEGOCIO · SOLO LECTURA</span>
           <h1>Así medimos cada taza.</h1>
           <p>
-            Resultados acumulados de los últimos 30 días. Esta vista no permite editar ventas,
-            inventario ni configuraciones.
+            Periodo actual del {date(data.period.start)} al {date(data.period.end)}. Esta vista no
+            permite editar ventas, inventario ni configuraciones.
           </p>
         </div>
         <div className="showcase-trust">
@@ -279,6 +287,87 @@ export default function ShowcaseView({ data }: { data: ShowcaseDashboard }) {
           </table>
         </div>
       </section>
+
+      {data.archives.length > 0 && (
+        <section className="showcase-card showcase-archives">
+          <div className="showcase-card-title">
+            <div>
+              <span className="eyebrow">HISTORIAL CONSERVADO</span>
+              <h2>Periodos anteriores</h2>
+            </div>
+            <Archive />
+          </div>
+          <p>
+            Cada cierre guarda las ventas, los gastos y el inventario tal como estaban antes de
+            comenzar de nuevo.
+          </p>
+          <div className="showcase-archive-list">
+            {data.archives.map((archive) => (
+              <article className="showcase-archive" key={archive.id}>
+                <header>
+                  <div>
+                    <span>PERIODO CERRADO</span>
+                    <h3>
+                      {date(archive.period.start)} — {date(archive.period.end)}
+                    </h3>
+                  </div>
+                  <small>Guardado {dateTime(archive.createdAt)}</small>
+                </header>
+                <dl>
+                  <div>
+                    <dt>Ventas cobradas</dt>
+                    <dd>{money(archive.metrics.sales)}</dd>
+                  </div>
+                  <div>
+                    <dt>Tickets</dt>
+                    <dd>{archive.metrics.tickets}</dd>
+                  </div>
+                  <div>
+                    <dt>Costos y gastos</dt>
+                    <dd>{money(archive.metrics.investment)}</dd>
+                  </div>
+                  <div>
+                    <dt>Resultado registrado</dt>
+                    <dd>{money(archive.metrics.netProfit)}</dd>
+                  </div>
+                </dl>
+                <details>
+                  <summary>Ver inventario guardado</summary>
+                  <div className="responsive-table-wrap">
+                    <table className="admin-data-table showcase-table">
+                      <thead>
+                        <tr>
+                          <th>Insumo</th>
+                          <th>Existencia al cierre</th>
+                          <th>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {archive.inventory.items.map((item) => (
+                          <tr key={item.id}>
+                            <td data-label="Insumo">{item.name}</td>
+                            <td data-label="Existencia">
+                              {item.stock.toLocaleString('es-MX')} {item.unit}
+                            </td>
+                            <td data-label="Valor">{money(item.value)}</td>
+                          </tr>
+                        ))}
+                        {!archive.inventory.items.length && (
+                          <tr>
+                            <td className="empty-table" colSpan={3}>
+                              No había insumos registrados en este cierre.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="showcase-method">
         <ReceiptText size={26} />
